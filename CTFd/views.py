@@ -197,9 +197,10 @@ def setup():
                 set_config("ctf_banner", f.location)
 
             # Splice in our banner
-            index = f"""<div class="row">
+            index = f"""
+<div class="row">
   <div class="col-md-6 offset-md-3">
-    <img class="w-100 mx-auto d-block" style="max-width: 500px; padding: 50px; padding-top: 14vh;" src="/themes/core/static/img/logo.png" alt="H7CTF Banner" />
+    <img class="w-100 mx-auto d-block" style="max-width: 500px; padding: 50px; padding-top: 14vh;" src="{default_ctf_banner_location}" alt="H7CTF Banner" />
     <h2 class="text-center" style="margin-top: 20px; font-weight: 700; letter-spacing: 2px;">H7CTF</h2>
     <p class="text-center" style="font-size: 1.2rem; color: #888; margin-top: 10px;">Test your skills. Prove your worth. Only the relentless survive.</p>
     <div class="text-center" style="margin-top: 20px;">
@@ -213,24 +214,35 @@ def setup():
   </div>
 </div>
 <script>
+document.addEventListener("DOMContentLoaded", function() {{
   const countdownElement = document.getElementById("countdown");
   const ctfStart = new Date("2025-10-11T09:00:00+05:30");
   const ctfEnd = new Date("2025-10-12T21:00:00+05:30");
 
-  function updateCountdown() {
+  function updateCountdown() {{
     const now = new Date();
-    if (now >= ctfEnd) {
-      countdownElement.innerHTML = " < span style = color: #95a5a6;>ENDED</span>";return;}if(now>= ctfStart && now < ctfEnd) {
-      countdownElement.innerHTML = " < span style = color: #2ecc71;>LIVE</span>";return;}const distance= ctfStart - now;
-      const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((distance % (1000 * 60 * 60)) / 1000 / 60);
-      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-      countdownElement.textContent = `${days}d ${hours}h ${minutes}m ${seconds}s`;
-    }
-    updateCountdown();
-    setInterval(updateCountdown, 1000);
-</script>"""
+    if (now >= ctfEnd) {{
+      countdownElement.innerHTML = "<span style='color: #95a5a6;'>ENDED</span>";
+      return;
+    }}
+    if (now >= ctfStart && now < ctfEnd) {{
+      countdownElement.innerHTML = "<span style='color: #2ecc71;'>LIVE</span>";
+      return;
+    }}
+    const distance = ctfStart - now;
+    const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+    countdownElement.textContent = days + "d " + hours + "h " + minutes + "m " + seconds + "s";
+  }}
+
+  updateCountdown();
+  setInterval(updateCountdown, 1000);
+}});
+</script>
+"""
+
             page.content = index
 
             # Visibility

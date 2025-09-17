@@ -7,7 +7,9 @@ CTFd [Latest](https://github.com/CTFd/CTFd/releases/latest)
   - multiple plugin support + custom ui
     - docker challenges
     - anti cheat
-- 3.8.8 [`cooking`]
+- 3.8.0 [`cooked`]
+  - discord notifier
+  - geoint support
 
 
 ### Instructions

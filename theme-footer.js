@@ -501,7 +501,71 @@
         });
     }
 
-    // Initialize everything when DOM is ready
+    const dropdowns = {
+        "Occupation": { "choices": ["Student", "Professional", "Other"], "id": 2 },
+        "Country": {
+                "choices": [
+                "Antartica","Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina",
+                "Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados",
+                "Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana",
+                "Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon",
+                "Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo (Congo-Brazzaville)",
+                "Costa Rica","Croatia","Cuba","Cyprus","Czech Republic","Democratic Republic of the Congo","Denmark",
+                "Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea",
+                "Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia",
+                "Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti",
+                "Holy See","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel",
+                "Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kuwait","Kyrgyzstan",
+                "Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg",
+                "Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mars","Mauritania",
+                "Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco",
+                "Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua",
+                "Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine",
+                "Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar",
+                "Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines",
+                "Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles",
+                "Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa",
+                "South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland",
+                "Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago",
+                "Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates",
+                "United Kingdom","United States","Uruguay","Uzbekistan","Vanuatu","Venezuela","Vietnam",
+                "Yemen","Zambia","Zimbabwe"
+                ],
+                "id": 4,
+            }
+    };
+
+    function initCustomDropdowns() {
+        if (!window.location.pathname.startsWith("/register")) return;
+
+        for (const key in dropdowns) {
+            const data = dropdowns[key];
+            const field = document.querySelector(`#fields\\[${data.id}\\]`);
+            if (!field) continue;
+
+            const div = field.parentElement;
+            field.remove();
+
+            const select = document.createElement("select");
+            select.className = "form-control custom-select";
+            select.id = `fields[${data.id}]`;
+            select.name = `fields[${data.id}]`;
+            select.required = true;
+
+            data.choices.forEach(choice => {
+                const option = document.createElement("option");
+                option.value = choice;
+                option.text = choice;
+                select.appendChild(option);
+            });
+
+            const b = div.querySelector("b");
+            if (b) b.after(select);
+            else div.appendChild(select);
+        }
+    }
+
+    // Hook dropdowns into your main initializer
     function initializeTheme() {
         init();
         enhanceUI();
@@ -509,20 +573,21 @@
         enhanceScrolling();
         handleThemeTransition();
         enhanceKeyboardNav();
-        
-        // Re-enhance UI elements when new content is added
+        initCustomDropdowns();
+
+        // re-enhance on DOM changes
         const contentObserver = new MutationObserver(() => {
             enhanceUI();
             setupAnimations();
+            initCustomDropdowns();
         });
-        
+
         contentObserver.observe(document.body, {
             childList: true,
             subtree: true
         });
     }
 
-    // Event listeners
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initializeTheme);
     } else {
@@ -534,28 +599,23 @@
         initParticles();
     });
 
-    // Performance optimization - pause animation when tab is not visible
     document.addEventListener('visibilitychange', () => {
         isVisible = !document.hidden;
     });
 
-    // Cleanup
     window.addEventListener('beforeunload', () => {
         cancelAnimationFrame(animationId);
     });
 
-    // Add CSS for keyboard navigation
     const style = document.createElement('style');
     style.textContent = `
         .keyboard-navigation *:focus {
             outline: 2px solid var(--accent-color) !important;
             outline-offset: 2px !important;
         }
-        
         .focused {
             transform: scale(1.02);
         }
-        
         .enhanced {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }

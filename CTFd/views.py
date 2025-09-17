@@ -7,8 +7,13 @@ from flask import (
     redirect,
     render_template,
     request,
-    send_file,
-    session,
+            page = Pages(title=ctf_name, route="index", content="", draft=False, format="html")
+            default_ctf_banner_location = url_for("views.themes", path="img/logo.png")
+            ctf_banner = request.files.get("ctf_banner")
+            if ctf_banner:
+                f = upload_file(file=ctf_banner, page_id=page.id)
+                default_ctf_banner_location = url_for("views.files", path=f.location)
+                set_config("ctf_banner", f.location)
     url_for,
 )
 from jinja2.exceptions import TemplateNotFound
@@ -186,7 +191,7 @@ def setup():
             )
 
             # Create an empty index page
-            page = Pages(title=ctf_name, route="index", content="", draft=False)
+            page = Pages(title=ctf_name, route="index", content="", draft=False, format="html")
 
             # Upload banner
             default_ctf_banner_location = url_for("views.themes", path="img/logo.png")
@@ -199,42 +204,58 @@ def setup():
             # Splice in our banner
             index = f"""
 <div class="row">
-  <div class="col-md-6 offset-md-3">
-    <img class="w-100 mx-auto d-block" style="max-width: 500px; padding: 50px; padding-top: 14vh;" src="{default_ctf_banner_location}" alt="H7CTF Banner" />
-    <h2 class="text-center" style="margin-top: 20px; font-weight: 700; letter-spacing: 2px;">H7CTF</h2>
-    <p class="text-center" style="font-size: 1.2rem; color: #888; margin-top: 10px;">Test your skills. Prove your worth. Only the relentless survive.</p>
-    <div class="text-center" style="margin-top: 20px;">
+  <div class="col-md-6 offset-md-3 text-center">
+    <img 
+      src="{default_ctf_banner_location}" 
+      alt="H7CTF Banner" 
+      class="w-100 mx-auto d-block" 
+      style="max-width: 500px; padding: 50px; padding-top: 14vh;"
+    />
+    <h2 style="margin-top: 20px; font-weight: 700; letter-spacing: 2px;">
+      H7CTF
+    </h2>
+    <p style="font-size: 1.2rem; color: #888; margin-top: 10px;">
+      Test your skills. Prove your worth. Only the relentless survive.
+    </p>
+
+    <div style="margin-top: 20px;">
       <h4 id="countdown" style="font-weight: 600; color: #e74c3c;">Loading...</h4>
     </div>
-    <br>
-    <div class="text-center">
+
+    <div style="margin-top: 30px;">
       <a href="/challenges" class="btn btn-primary btn-lg mx-2">Enter Arena</a>
       <a href="/register" class="btn btn-outline-secondary btn-lg mx-2">Join Now</a>
     </div>
   </div>
 </div>
+
 <script>
 document.addEventListener("DOMContentLoaded", function() {{
   const countdownElement = document.getElementById("countdown");
   const ctfStart = new Date("2025-10-11T09:00:00+05:30");
-  const ctfEnd = new Date("2025-10-12T21:00:00+05:30");
+  const ctfEnd   = new Date("2025-10-12T21:00:00+05:30");
 
   function updateCountdown() {{
     const now = new Date();
+
     if (now >= ctfEnd) {{
       countdownElement.innerHTML = "<span style='color: #95a5a6;'>ENDED</span>";
       return;
     }}
-    if (now >= ctfStart && now < ctfEnd) {{
+
+    if (now >= ctfStart) {{
       countdownElement.innerHTML = "<span style='color: #2ecc71;'>LIVE</span>";
       return;
     }}
+
     const distance = ctfStart - now;
-    const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-    countdownElement.textContent = days + "d " + hours + "h " + minutes + "m " + seconds + "s";
+    const days     = Math.floor(distance / (1000 * 60 * 60 * 24));
+    const hours    = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes  = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds  = Math.floor((distance % (1000 * 60)) / 1000);
+
+    countdownElement.textContent =
+      `${{days}}d ${{hours}}h ${{minutes}}m ${{seconds}}s`;
   }}
 
   updateCountdown();

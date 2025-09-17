@@ -337,6 +337,46 @@ body {
     color: #3b82f6 !important;
 }
 
+/* Email Notification Snackbar Fix */
+.ctfdio-email-nudge {
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: 2000 !important;
+    max-width: 400px !important;
+    margin: 0 !important;
+    padding: 12px 16px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid var(--accent-color) !important;
+    background: rgba(20, 24, 39, 0.95) !important;
+    animation: slideUp 0.3s ease-out !important;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(100px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+.ctfdio-email-nudge .btn-close {
+    background: none !important;
+    border: none !important;
+    color: var(--text-primary) !important;
+    opacity: 0.7 !important;
+    padding: 4px !important;
+}
+
+.ctfdio-email-nudge .btn-close:hover {
+    opacity: 1 !important;
+}
+
 #docker_container, .challenge-connection-info {
     color: var(--text-primary) !important;
     background: var(--glass-bg) !important;

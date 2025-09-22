@@ -126,26 +126,87 @@ body {
     color: var(--accent-color) !important;
 }
 
-/* Theme Toggle Button Fix */
-.btn-outline-secondary,
+/* Enhanced Secondary Button - Better Contrast & Aligned Sizing */
+.btn-secondary {
+    background: rgba(148, 163, 184, 0.2) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+    border: 1px solid rgba(148, 163, 184, 0.4) !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    font-family: 'Inter', sans-serif !important;
+    letter-spacing: 0.02em !important;
+    transition: background-color 0.2s ease, border-color 0.2s ease !important;
+    box-shadow: 0 1px 2px rgba(148, 163, 184, 0.1) !important;
+    padding: 0.5rem 1.25rem !important;
+    font-size: 0.875rem !important;
+    line-height: 1.4 !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.btn-secondary:hover {
+    background: rgba(148, 163, 184, 0.3) !important;
+    color: rgba(255, 255, 255, 1) !important;
+    border-color: rgba(148, 163, 184, 0.5) !important;
+    box-shadow: 0 2px 4px rgba(148, 163, 184, 0.15) !important;
+}
+
+.btn-outline-secondary {
+    background: rgba(148, 163, 184, 0.15) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+    border: 1px solid rgba(148, 163, 184, 0.4) !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    font-family: 'Inter', sans-serif !important;
+    letter-spacing: 0.02em !important;
+    transition: background-color 0.2s ease, border-color 0.2s ease !important;
+    box-shadow: 0 1px 2px rgba(148, 163, 184, 0.08) !important;
+    padding: 0.5rem 1.25rem !important;
+    font-size: 0.875rem !important;
+    line-height: 1.4 !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.btn-outline-secondary:hover {
+    background: rgba(148, 163, 184, 0.25) !important;
+    color: rgba(255, 255, 255, 1) !important;
+    border-color: rgba(148, 163, 184, 0.5) !important;
+    box-shadow: 0 2px 4px rgba(148, 163, 184, 0.12) !important;
+}
+
+.btn-outline-secondary:focus {
+    color: rgba(255, 255, 255, 1) !important;
+    border-color: rgba(148, 163, 184, 0.6) !important;
+    box-shadow: 0 0 0 0.2rem rgba(148, 163, 184, 0.2) !important;
+}
+
+/* Navbar specific overrides */
 .navbar .btn-outline-secondary {
-    color: var(--text-secondary) !important;
-    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+    border-color: rgba(148, 163, 184, 0.3) !important;
     background: transparent !important;
+    padding: 0.375rem 0.75rem !important;
+    font-size: 0.8125rem !important;
+    min-height: 32px !important;
 }
 
-.btn-outline-secondary:hover,
 .navbar .btn-outline-secondary:hover {
-    color: var(--accent-color) !important;
-    border-color: var(--accent-color) !important;
-    background: rgba(88, 166, 255, 0.1) !important;
+    color: var(--text-primary) !important;
+    border-color: rgba(148, 163, 184, 0.4) !important;
+    background: rgba(148, 163, 184, 0.1) !important;
 }
 
-.btn-outline-secondary:focus,
 .navbar .btn-outline-secondary:focus {
-    color: var(--accent-color) !important;
-    border-color: var(--accent-color) !important;
-    box-shadow: 0 0 0 0.2rem rgba(88, 166, 255, 0.25) !important;
+    color: var(--text-primary) !important;
+    border-color: rgba(148, 163, 184, 0.5) !important;
+    box-shadow: 0 0 0 0.2rem rgba(148, 163, 184, 0.2) !important;
 }
 
 .navbar-nav .nav-link {
@@ -229,46 +290,45 @@ body {
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
 }
 
-/* Primary Buttons - Elegant Submit Styling */
+/* Primary Buttons - Refined Stoic & Elegant Styling */
 .btn-primary {
-    background: var(--accent-color) !important;
-    color: var(--primary-bg) !important;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: #ffffff !important;
     border: none !important;
-    border-radius: 6px !important;
-    font-weight: 500 !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
     font-family: 'Inter', sans-serif !important;
-    letter-spacing: 0.01em !important;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    letter-spacing: 0.02em !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     position: relative;
-    overflow: hidden;
-    box-shadow: 0 1px 3px rgba(100, 255, 218, 0.2);
-}
-
-.btn-primary::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
-    transition: left 0.4s ease;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2) !important;
+    padding: 0.5rem 1.25rem !important;
+    font-size: 0.875rem !important;
+    line-height: 1.4 !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
 .btn-primary:hover {
-    background: var(--accent-color) !important;
-    color: var(--primary-bg) !important;
-    box-shadow: 0 2px 8px rgba(100, 255, 218, 0.3) !important;
-    filter: brightness(1.05);
-}
-
-.btn-primary:hover::before {
-    left: 100%;
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.35) !important;
+    transform: translateY(-2px) !important;
 }
 
 .btn-primary:active {
-    transform: translateY(1px) !important;
-    box-shadow: 0 1px 4px rgba(100, 255, 218, 0.2) !important;
+    transform: translateY(0px) !important;
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.25) !important;
+}
+
+.btn-primary:focus {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4) !important;
+    outline: none !important;
 }
 
 .btn-outline-primary {
@@ -287,19 +347,49 @@ body {
     box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2) !important;
 }
 
-/* Form Elements */
+/* Form Elements - Fixed Input Animations */
 .form-control {
     background: var(--tertiary-bg) !important;
     border: 1px solid var(--border-color) !important;
     border-radius: 8px !important;
     color: var(--text-primary) !important;
-    transition: var(--transition-smooth);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease !important;
+    transform: none !important;
+    animation: none !important;
 }
 
 .form-control:focus {
     border-color: var(--accent-color) !important;
     box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1) !important;
     background: var(--secondary-bg) !important;
+    transform: none !important;
+    animation: none !important;
+    outline: none !important;
+}
+
+/* Fix any weird input animations on login/register pages */
+input[type="text"], 
+input[type="email"], 
+input[type="password"], 
+input[type="tel"], 
+input[type="url"], 
+textarea,
+select {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease !important;
+    transform: none !important;
+    animation: none !important;
+}
+
+input[type="text"]:focus, 
+input[type="email"]:focus, 
+input[type="password"]:focus, 
+input[type="tel"]:focus, 
+input[type="url"]:focus, 
+textarea:focus,
+select:focus {
+    transform: none !important;
+    animation: none !important;
+    outline: none !important;
 }
 
 /* Modal Styling - Elegant Challenge Dialogs */
@@ -1101,6 +1191,36 @@ h1, h2, h3, h4, h5, h6 {
     color: white !important;
 }
 
+/* Landing Page Timer - Keep Red Color */
+.timer, 
+.countdown, 
+.countdown-timer,
+#timer,
+#countdown,
+.time-remaining,
+.ctf-timer,
+[id*="timer"], 
+[class*="timer"], 
+[class*="countdown"],
+.jumbotron .timer,
+.hero .timer,
+.landing-timer {
+    color: #ef4444 !important;
+    font-weight: 600 !important;
+    text-shadow: 0 1px 3px rgba(239, 68, 68, 0.3) !important;
+}
+
+/* Timer text elements that might be affected by general styling */
+.timer *, 
+.countdown *, 
+.countdown-timer *,
+#timer *,
+#countdown *,
+.time-remaining *,
+.ctf-timer * {
+    color: #ef4444 !important;
+}
+
 /* ================================
    LOADING STATES
    ================================ */
@@ -1671,23 +1791,26 @@ body:has(.homepage-wrapper) main {
     opacity: 0.6;
 }
 
-/* Enhanced buttons */
+/* Enhanced buttons - Refined Stoic Styling */
 .btn-primary {
-    background: var(--gradient-accent) !important;
-    color: var(--primary-bg) !important;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: #ffffff !important;
     border: none !important;
-    border-radius: 10px !important;
+    border-radius: 8px !important;
     font-weight: 600 !important;
-    font-family: 'Space Grotesk', sans-serif !important;
-    letter-spacing: 0.025em !important;
-    transition: var(--transition-bounce) !important;
+    font-family: 'Inter', sans-serif !important;
+    letter-spacing: 0.02em !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     position: relative !important;
-    overflow: hidden !important;
+    overflow: visible !important;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2) !important;
 }
 
 .btn-primary:hover {
-    transform: translateY(-2px) scale(1.05) !important;
-    box-shadow: 0 8px 20px rgba(100, 255, 218, 0.4) !important;
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+    color: #ffffff !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.35) !important;
 }
 
 /* Flag Input and Submit Button - Elegant and Consistent */
@@ -1814,192 +1937,161 @@ body:has(.homepage-wrapper) main {
   <script>
 // Fractals Theme - Minimalist Geometric Animations
 (function() {
-    'use strict';
-    
-    // Create canvas for fractal background
-    const canvas = document.createElement('canvas');
-    canvas.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        z-index: -1;
-        pointer-events: none;
-        opacity: 0.6;
-    `;
-    document.body.appendChild(canvas);
 
-    const ctx = canvas.getContext('2d');
-    let geometricShapes = [];
-    let animationId;
-    let isVisible = true;
-    let time = 0;
-
-    // Performance optimization
-    let lastTime = 0;
-    const targetFPS = 30;
-    const frameInterval = 1000 / targetFPS;
-
-    function resizeCanvas() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        initGeometricShapes();
-    }
-
-    // Create minimalist geometric shapes
-    function createGeometricShape() {
-        const shapes = ['triangle', 'hexagon', 'line'];
-        return {
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height,
-            size: Math.random() * 60 + 20,
-            type: shapes[Math.floor(Math.random() * shapes.length)],
-            rotation: Math.random() * Math.PI * 2,
-            rotationSpeed: (Math.random() - 0.5) * 0.01,
-            opacity: Math.random() * 0.1 + 0.05,
-            color: Math.random() > 0.5 ? '#58a6ff' : '#f78166'
-        };
-    }
-
-    function initGeometricShapes() {
-        geometricShapes = [];
-        const shapeCount = Math.min(6, Math.floor(canvas.width * canvas.height / 150000));
-        
-        for (let i = 0; i < shapeCount; i++) {
-            geometricShapes.push(createGeometricShape());
-        }
-    }
-
-    // Draw geometric shapes
-    function drawTriangle(x, y, size, rotation) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(rotation);
-        ctx.beginPath();
-        ctx.moveTo(0, -size/2);
-        ctx.lineTo(-size/2, size/2);
-        ctx.lineTo(size/2, size/2);
-        ctx.closePath();
-        ctx.restore();
-    }
-
-    function drawHexagon(x, y, size, rotation) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(rotation);
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const angle = (i * Math.PI) / 3;
-            const px = Math.cos(angle) * size/2;
-            const py = Math.sin(angle) * size/2;
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.restore();
-    }
-
-    function drawLine(x, y, size, rotation) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(rotation);
-        ctx.beginPath();
-        ctx.moveTo(-size/2, 0);
-        ctx.lineTo(size/2, 0);
-        ctx.restore();
-    }
-
-    function animate(currentTime) {
-        if (currentTime - lastTime < frameInterval) {
-            animationId = requestAnimationFrame(animate);
-            return;
-        }
-        
-        lastTime = currentTime;
-        time += 0.01;
-
-        if (!isVisible) {
-            animationId = requestAnimationFrame(animate);
-            return;
-        }
-
-        // Clear canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Draw and update geometric shapes
-        geometricShapes.forEach(shape => {
-            ctx.save();
-            
-            // Set style
-            ctx.globalAlpha = shape.opacity * (0.5 + 0.5 * Math.sin(time + shape.x * 0.01));
-            ctx.strokeStyle = shape.color;
-            ctx.lineWidth = 1;
-            ctx.fillStyle = 'transparent';
-
-            // Update rotation
-            shape.rotation += shape.rotationSpeed;
-
-            // Draw shape
-            switch(shape.type) {
-                case 'triangle':
-                    drawTriangle(shape.x, shape.y, shape.size, shape.rotation);
-                    ctx.stroke();
-                    break;
-                case 'hexagon':
-                    drawHexagon(shape.x, shape.y, shape.size, shape.rotation);
-                    ctx.stroke();
-                    break;
-                case 'line':
-                    drawLine(shape.x, shape.y, shape.size, shape.rotation);
-                    ctx.stroke();
-                    break;
-            }
-            
-            ctx.restore();
-        });
-
-        animationId = requestAnimationFrame(animate);
-    }
-
-    // Visibility API for performance
-    function handleVisibilityChange() {
-        isVisible = !document.hidden;
-        if (isVisible) {
-            animate(performance.now());
-        } else if (animationId) {
-            cancelAnimationFrame(animationId);
-        }
-    }
-
-    // Initialize
-    function init() {
-        resizeCanvas();
-        animate(performance.now());
-
-        // Event listeners
-        window.addEventListener('resize', resizeCanvas);
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-    }
-
-    // Wait for DOM to load
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
-
-    // Cleanup on page unload
-    window.addEventListener('beforeunload', function() {
-        if (animationId) {
-            cancelAnimationFrame(animationId);
-        }
-    });
 })();
   </script>
 {% endblock %}
 
 {{ Plugins.scripts }}
+
+<script>
+// Google Analytics
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-7HYG6V5VYD');
+
+(function() {
+    var script = document.createElement('script');
+    script.async = true;
+    script.src = 'https://www.googletagmanager.com/gtag/js?id=G-7HYG6V5VYD';
+    document.head.appendChild(script);
+})();
+
+// Custom Dropdown Functionality
+const dropdowns = {
+    "Occupation": { "choices": ["Student", "Professional", "Other"], "id": 2 },
+    "Country": {
+        "choices": [
+            "Antarctica","Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina",
+            "Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados",
+            "Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana",
+            "Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon",
+            "Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo (Congo-Brazzaville)",
+            "Costa Rica","Croatia","Cuba","Cyprus","Czech Republic","Democratic Republic of the Congo","Denmark",
+            "Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea",
+            "Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia",
+            "Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti",
+            "Holy See","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel",
+            "Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kuwait","Kyrgyzstan",
+            "Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg",
+            "Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mars","Mauritania",
+            "Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco",
+            "Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua",
+            "Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine",
+            "Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar",
+            "Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines",
+            "Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles",
+            "Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa",
+            "South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland",
+            "Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago",
+            "Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates",
+            "United Kingdom","United States","Uruguay","Uzbekistan","Vanuatu","Venezuela","Vietnam",
+            "Yemen","Zambia","Zimbabwe"
+        ],
+        "id": 4
+    }
+};
+
+function initCustomDropdowns() {
+    // Only run on registration page
+    if (!window.location.pathname.includes("/register")) return;
+    
+    console.log("Initializing custom dropdowns...");
+    
+    for (const key in dropdowns) {
+        const data = dropdowns[key];
+        console.log(`Processing ${key} field (id: ${data.id})`);
+        
+        // Try different selector patterns
+        let field = document.querySelector(`#fields\\[${data.id}\\]`);
+        if (!field) {
+            field = document.querySelector(`input[name="fields[${data.id}]"]`);
+        }
+        if (!field) {
+            field = document.querySelector(`[name="fields[${data.id}]"]`);
+        }
+        
+        if (!field) {
+            console.log(`Field not found for ${key} (id: ${data.id})`);
+            continue;
+        }
+        
+        console.log(`Found field for ${key}:`, field);
+        
+        const div = field.parentElement;
+        const fieldId = field.id;
+        const fieldName = field.name;
+        const isRequired = field.hasAttribute('required');
+        
+        // Create select element
+        const select = document.createElement("select");
+        select.className = "form-control custom-select";
+        select.id = fieldId;
+        select.name = fieldName;
+        if (isRequired) select.required = true;
+        
+        // Add default option
+        const defaultOption = document.createElement("option");
+        defaultOption.value = "";
+        defaultOption.text = `Select ${key}`;
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        select.appendChild(defaultOption);
+        
+        // Add choices
+        data.choices.forEach(choice => {
+            const option = document.createElement("option");
+            option.value = choice;
+            option.text = choice;
+            select.appendChild(option);
+        });
+        
+        // Replace the input field with select
+        field.parentNode.replaceChild(select, field);
+        console.log(`Replaced ${key} field with dropdown`);
+    }
+}
+
+// Initialize when DOM is ready
+function initializeCustomFields() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initCustomDropdowns);
+    } else {
+        initCustomDropdowns();
+    }
+    
+    // Also watch for dynamic content changes
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.addedNodes.length > 0) {
+                // Check if any added nodes contain form fields
+                const hasFormFields = Array.from(mutation.addedNodes).some(node => {
+                    if (node.nodeType === 1) { // Element node
+                        return node.querySelector && (
+                            node.querySelector('input[name^="fields["]') ||
+                            node.matches('input[name^="fields["]')
+                        );
+                    }
+                    return false;
+                });
+                
+                if (hasFormFields) {
+                    setTimeout(initCustomDropdowns, 100);
+                }
+            }
+        });
+    });
+    
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+}
+
+// Initialize everything
+initializeCustomFields();
+</script>
 
 {{ Configs.theme_footer }}
 </body>

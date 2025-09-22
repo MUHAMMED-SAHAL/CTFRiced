@@ -1,0 +1,1887 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>{{ title or Configs.ctf_name }}</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="shortcut icon" href="{{ Configs.ctf_small_icon }}" type="image/x-icon">
+
+  {{ meta | safe }}
+
+  {% block stylesheets %}
+    {{ Assets.css("assets/scss/main.scss") }}
+    <style>
+/* Fractals Theme - Minimalist & Elegant */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600&display=swap');
+
+/* CSS Custom Properties - Fractal Inspired */
+:root {
+    /* Base Colors - Inspired by mathematical precision */
+    --primary-bg: #0a0e1a;
+    --secondary-bg: #141827;
+    --tertiary-bg: #1e2435;
+    --accent-color: #64ffda;
+    --accent-secondary: #7c3aed;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    
+    /* Fractal-inspired gradients */
+    --card-bg: rgba(20, 24, 39, 0.85);
+    --border-color: rgba(100, 255, 218, 0.08);
+    --border-hover: rgba(100, 255, 218, 0.2);
+    --shadow-color: rgba(0, 0, 0, 0.3);
+    --shadow-elevated: rgba(0, 0, 0, 0.5);
+    
+    /* Geometric gradients */
+    --gradient-bg: linear-gradient(135deg, #0a0e1a 0%, #141827 50%, #1e2435 100%);
+    --gradient-accent: linear-gradient(135deg, #64ffda 0%, #7c3aed 100%);
+    
+    /* Transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    
+    /* Glass effects */
+    --glass-bg: rgba(20, 24, 39, 0.6);
+    --glass-border: rgba(255, 255, 255, 0.05);
+}
+
+/* Light Mode Variables - Enhanced Visibility */
+[data-bs-theme="light"] {
+    --primary-bg: #fefefe;
+    --secondary-bg: #f8fafc;
+    --tertiary-bg: #f1f5f9;
+    --accent-color: #0ea5e9;
+    --accent-secondary: #8b5cf6;
+    --text-primary: #0f172a !important;
+    --text-secondary: #475569 !important;
+    --text-muted: #64748b !important;
+    --card-bg: rgba(255, 255, 255, 0.9) !important;
+    --border-color: rgba(14, 165, 233, 0.08) !important;
+    --border-hover: rgba(14, 165, 233, 0.2) !important;
+    --shadow-color: rgba(15, 23, 42, 0.04) !important;
+    --shadow-elevated: rgba(15, 23, 42, 0.1) !important;
+    --gradient-bg: linear-gradient(135deg, #fefefe 0%, #f8fafc 50%, #f1f5f9 100%) !important;
+    --gradient-accent: linear-gradient(135deg, #0ea5e9 0%, #8b5cf6 100%) !important;
+    --glass-bg: rgba(255, 255, 255, 0.7) !important;
+    --glass-border: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Global Styles */
+html {
+    scroll-behavior: smooth !important;
+}
+
+body {
+    background: var(--gradient-bg) !important;
+    color: var(--text-primary) !important;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    line-height: 1.6;
+}
+
+@keyframes fractalPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    33% { opacity: 0.7; transform: scale(1.02); }
+    66% { opacity: 0.8; transform: scale(0.98); }
+}
+
+/* Page Load Animation */
+body {
+    opacity: 0;
+    animation: fadeInFractal 1s ease-out forwards;
+}
+@keyframes fadeInFractal {
+    to { opacity: 1; }
+}
+
+/* Navbar Enhancement - Match theme-header.css */
+.navbar {
+    background-color: var(--primary-bg) !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    backdrop-filter: blur(10px) !important;
+    box-shadow: 0 1px 3px var(--shadow-color) !important;
+}
+
+.navbar-brand {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-weight: 500 !important;
+    color: var(--accent-color) !important;
+    transition: color 0.2s ease !important;
+    padding: 0.375rem 0.75rem !important;
+    border-radius: 6px !important;
+    text-decoration: none !important;
+    white-space: nowrap !important;
+}
+
+.navbar-brand:hover {
+    color: var(--accent-color) !important;
+    background-color: rgba(88, 166, 255, 0.08) !important;
+    filter: brightness(1.3) !important;
+}
+
+.navbar-brand:focus {
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2) !important;
+    background-color: rgba(88, 166, 255, 0.08) !important;
+    color: var(--accent-color) !important;
+}
+
+/* Theme Toggle Button Fix */
+.btn-outline-secondary,
+.navbar .btn-outline-secondary {
+    color: var(--text-secondary) !important;
+    border-color: var(--border-color) !important;
+    background: transparent !important;
+}
+
+.btn-outline-secondary:hover,
+.navbar .btn-outline-secondary:hover {
+    color: var(--accent-color) !important;
+    border-color: var(--accent-color) !important;
+    background: rgba(88, 166, 255, 0.1) !important;
+}
+
+.btn-outline-secondary:focus,
+.navbar .btn-outline-secondary:focus {
+    color: var(--accent-color) !important;
+    border-color: var(--accent-color) !important;
+    box-shadow: 0 0 0 0.2rem rgba(88, 166, 255, 0.25) !important;
+}
+
+.navbar-nav .nav-link {
+    color: var(--text-secondary) !important;
+    font-weight: 400 !important;
+    position: relative !important;
+    transition: color 0.2s ease !important;
+    padding: 0.375rem 0.75rem !important;
+    border-radius: 6px !important;
+    white-space: nowrap !important;
+}
+
+.navbar-nav .nav-link:hover {
+    color: var(--accent-color) !important;
+    background-color: rgba(100, 255, 218, 0.08) !important;
+}
+
+.navbar-nav .nav-link:active,
+.navbar-nav .nav-link:focus {
+    color: var(--accent-color) !important;
+    background-color: rgba(88, 166, 255, 0.08) !important;
+    outline: none !important;
+    transform: none !important;
+}
+
+/* Card Styling - Geometric & Minimalist */
+/* Card Styling - Minimalist & Elegant */
+.card {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    backdrop-filter: blur(10px);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent-color);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.card:hover {
+    border-color: var(--border-hover) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+}
+
+.card:hover::before {
+    opacity: 0.8;
+}
+
+/* Challenge Cards - Enhanced Contrast */
+.challenge-button {
+    background: rgba(30, 35, 45, 0.95) !important;
+    border: 2px solid rgba(60, 70, 85, 0.8) !important;
+    border-radius: 8px !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    color: rgba(230, 235, 245, 0.95) !important;
+}
+
+.challenge-button:hover {
+    background: rgba(45, 52, 65, 0.98) !important;
+    border-color: var(--accent-color) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    color: rgba(245, 250, 255, 1) !important;
+}
+
+.challenge-button .challenge-inner h3 {
+    color: rgba(230, 235, 245, 0.95) !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Primary Buttons - Elegant Submit Styling */
+.btn-primary {
+    background: var(--accent-color) !important;
+    color: var(--primary-bg) !important;
+    border: none !important;
+    border-radius: 6px !important;
+    font-weight: 500 !important;
+    font-family: 'Inter', sans-serif !important;
+    letter-spacing: 0.01em !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(100, 255, 218, 0.2);
+}
+
+.btn-primary::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+    transition: left 0.4s ease;
+}
+
+.btn-primary:hover {
+    background: var(--accent-color) !important;
+    color: var(--primary-bg) !important;
+    box-shadow: 0 2px 8px rgba(100, 255, 218, 0.3) !important;
+    filter: brightness(1.05);
+}
+
+.btn-primary:hover::before {
+    left: 100%;
+}
+
+.btn-primary:active {
+    transform: translateY(1px) !important;
+    box-shadow: 0 1px 4px rgba(100, 255, 218, 0.2) !important;
+}
+
+.btn-outline-primary {
+    border: 2px solid var(--accent-color) !important;
+    color: var(--accent-color) !important;
+    background: transparent !important;
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+}
+
+.btn-outline-primary:hover {
+    background: var(--accent-color) !important;
+    color: var(--primary-bg) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2) !important;
+}
+
+/* Form Elements */
+.form-control {
+    background: var(--tertiary-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    color: var(--text-primary) !important;
+    transition: var(--transition-smooth);
+}
+
+.form-control:focus {
+    border-color: var(--accent-color) !important;
+    box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1) !important;
+    background: var(--secondary-bg) !important;
+}
+
+/* Modal Styling - Elegant Challenge Dialogs */
+.modal-content {
+    background: var(--secondary-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+}
+
+/* General Text Brightness - Only Challenge Descriptions */
+.modal-content .challenge-desc,
+.modal-content .challenge-description,
+.modal-content .challenge-name {
+    color: var(--bs-gray-200) !important;
+}
+
+.modal-content .challenge-name {
+    color: var(--bs-gray-100) !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Docker Challenge Popup Text - Brighten Status Messages */
+.docker-challenge-container .status-indicator,
+.docker-challenge-container .timer-context,
+.docker-challenge-container .loading-text,
+.docker-challenge-container p,
+.docker-challenge-container .description {
+    color: rgba(229, 231, 235, 0.95) !important;
+    opacity: 1 !important;
+}
+
+/* Geo Challenge Input Spacing - MAXIMUM SPECIFICITY FORCE FIX */
+body .modal-content .row.mt-3 .col-md-6,
+html body .row.mt-3 .col-md-6,
+.row.mt-3 > .col-md-6 {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    margin-bottom: 1.5rem !important;
+    display: block !important;
+    width: 50% !important;
+    float: left !important;
+}
+
+/* SUPER SPECIFIC - GEO CHALLENGE ONLY */
+#map-container .row.mt-3 .col-md-6 {
+    background: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 1rem !important;
+    margin: 0 0 1rem 0 !important;
+    width: 50% !important;
+    float: left !important;
+    box-sizing: border-box !important;
+}
+
+#map-container .row.mt-3::after {
+    content: "" !important;
+    display: table !important;
+    clear: both !important;
+}
+
+.row.mt-3::after {
+    content: "" !important;
+    display: table !important;
+    clear: both !important;
+}
+
+/* Challenge File Download Buttons - Polished Styling */
+.modal-content .btn-file,
+.modal-content .btn.btn-info.btn-file {
+    background: linear-gradient(135deg, rgba(45, 55, 75, 0.9) 0%, rgba(55, 65, 85, 0.8) 100%) !important;
+    border: 1px solid rgba(75, 85, 105, 0.6) !important;
+    color: rgba(220, 225, 235, 0.95) !important;
+    padding: 0.65rem 1rem !important;
+    border-radius: 0.5rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    transition: all 0.3s ease !important;
+    text-decoration: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 0.5rem !important;
+    max-width: 100% !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.modal-content .btn-file:hover,
+.modal-content .btn.btn-info.btn-file:hover {
+    background: linear-gradient(135deg, rgba(55, 65, 85, 0.95) 0%, rgba(65, 75, 95, 0.9) 100%) !important;
+    border-color: rgba(100, 110, 130, 0.8) !important;
+    color: rgba(240, 245, 250, 1) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+    text-decoration: none !important;
+}
+
+.modal-content .btn-file i,
+.modal-content .btn.btn-info.btn-file i {
+    color: rgba(34, 197, 94, 0.8) !important;
+    font-size: 0.875rem !important;
+}
+
+.modal-content .btn-file:hover i,
+.modal-content .btn.btn-info.btn-file:hover i {
+    color: rgba(34, 197, 94, 1) !important;
+}
+
+.modal-content .btn-file small,
+.modal-content .btn.btn-info.btn-file small {
+    font-size: 0.8rem !important;
+    font-weight: 500 !important;
+    color: inherit !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--border-color) !important;
+    background: transparent !important;
+}
+
+.modal-title {
+    color: var(--text-primary) !important;
+    font-weight: 500 !important;
+}
+
+.modal-body {
+    color: var(--text-secondary) !important;
+}
+
+.modal-footer {
+    border-top: 1px solid var(--border-color) !important;
+    background: transparent !important;
+}
+
+/* Alerts */
+.alert {
+    border-radius: 8px !important;
+    border: none !important;
+    backdrop-filter: blur(10px);
+}
+
+/* Progress bars */
+.progress {
+    background: var(--tertiary-bg) !important;
+    border-radius: 6px !important;
+}
+
+.progress-bar {
+    background: var(--gradient-accent) !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--secondary-bg);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--accent-color);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-secondary);
+}
+
+/* ================================
+   COMPREHENSIVE TABULAR STYLING
+   ================================ */
+
+/* Enhanced Tables - Scoreboard, User List, Team List */
+.table {
+    color: var(--text-primary) !important;
+    background: transparent !important;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    font-size: 0.95rem;
+}
+
+.table thead th {
+    background: var(--glass-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-bottom: 2px solid var(--accent-color) !important;
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 1rem 1rem !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+    position: relative;
+    backdrop-filter: blur(15px);
+    box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+.table thead th:first-child {
+    border-top-left-radius: 12px;
+    border-left: 1px solid var(--border-color) !important;
+}
+
+.table thead th:last-child {
+    border-top-right-radius: 12px;
+    border-right: 1px solid var(--border-color) !important;
+}
+
+.table tbody td {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-top: none !important;
+    color: var(--text-primary) !important;
+    padding: 0.875rem 1rem !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+    transition: var(--transition-smooth);
+    font-weight: 500;
+}
+
+.table tbody tr {
+    transition: var(--transition-smooth);
+}
+
+.table tbody tr:hover {
+    background: rgba(88, 166, 255, 0.05) !important;
+}
+
+.table tbody tr:hover td {
+    background: rgba(88, 166, 255, 0.05) !important;
+    border-color: var(--border-hover) !important;
+}
+
+/* Table Row Numbering System */
+.table {
+    counter-reset: row-counter !important;
+}
+
+.table tbody tr {
+    counter-increment: row-counter !important;
+}
+
+.table tbody tr td:first-child::before {
+    content: counter(row-counter) ". " !important;
+    font-weight: 600 !important;
+    color: var(--accent-color) !important;
+    margin-right: 0.5rem !important;
+    padding: 0.125rem 0.375rem !important;
+    background: rgba(88, 166, 255, 0.1) !important;
+    border-radius: 4px !important;
+    font-size: 0.75rem !important;
+    display: inline-block !important;
+    min-width: 1.5rem !important;
+    text-align: center !important;
+    border: 1px solid rgba(88, 166, 255, 0.2) !important;
+}
+
+.table tbody tr:last-child td:first-child {
+    border-bottom-left-radius: 12px;
+}
+
+.table tbody tr:last-child td:last-child {
+    border-bottom-right-radius: 12px;
+}
+
+/* Enhanced Scoreboard Styling */
+.scoreboard-table {
+    box-shadow: 0 8px 32px var(--shadow-elevated), 0 4px 16px var(--shadow-color);
+    border-radius: 16px;
+    overflow: hidden;
+    margin: 2rem 0;
+    position: relative;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+}
+
+.scoreboard-table::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--gradient-accent);
+    z-index: 1;
+}
+
+.scoreboard-table .table {
+    margin: 0;
+    background: transparent;
+}
+
+/* Scoreboard ranking enhancements */
+.scoreboard-table .table tbody tr:first-child {
+    background: linear-gradient(90deg, rgba(255, 215, 0, 0.1), transparent) !important;
+    border-left: 4px solid #ffd700 !important;
+}
+
+.scoreboard-table .table tbody tr:nth-child(2) {
+    background: linear-gradient(90deg, rgba(192, 192, 192, 0.1), transparent) !important;
+    border-left: 4px solid #c0c0c0 !important;
+}
+
+.scoreboard-table .table tbody tr:nth-child(3) {
+    background: linear-gradient(90deg, rgba(205, 127, 50, 0.1), transparent) !important;
+    border-left: 4px solid #cd7f32 !important;
+}
+
+/* Team/User ranking badges */
+.table .badge {
+    background: var(--gradient-accent) !important;
+    color: var(--primary-bg) !important;
+    font-weight: 600 !important;
+    padding: 0.4rem 0.8rem !important;
+    border-radius: 20px !important;
+    font-size: 0.8rem;
+    min-width: 2.5rem;
+    text-align: center;
+}
+
+/* User/Team name styling in tables */
+.table td a, .table td strong {
+    color: var(--accent-color) !important;
+    text-decoration: none !important;
+    font-weight: 600 !important;
+    transition: var(--transition-smooth);
+}
+
+.table td a:hover {
+    color: var(--accent-secondary) !important;
+    text-shadow: 0 0 8px rgba(88, 166, 255, 0.3);
+}
+
+/* Score styling */
+.table td[data-score], .table .score {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-weight: 600 !important;
+    color: var(--accent-color) !important;
+    font-size: 1.1em;
+}
+
+/* ================================
+   HOMEPAGE LANDING PAGE FIX ONLY
+   ================================ */
+
+/* Fix homepage container box without affecting jumbotron pages */
+main[role="main"]:not(:has(.jumbotron)) {
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: calc(100vh - 120px) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Homepage container - only when no jumbotron exists */
+main[role="main"]:not(:has(.jumbotron)) .container {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    padding: 2rem !important;
+    width: 100% !important;
+}
+
+/* Remove the offset column box - only on homepage */
+main[role="main"]:not(:has(.jumbotron)) .col-md-6.offset-md-3 {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 2rem !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    offset: 0 !important;
+}
+
+/* Homepage row layout - only when no jumbotron */
+main[role="main"]:not(:has(.jumbotron)) .row {
+    margin: 0 !important;
+    width: 100% !important;
+    justify-content: center !important;
+    align-items: center !important;
+    display: flex !important;
+}
+
+/* ================================
+   CHALLENGE TILES STYLING
+   ================================ */
+
+/* Challenge Button Styling - Enhanced Contrast */
+.challenge-button {
+    background: rgba(30, 35, 45, 0.95) !important;
+    border: 2px solid rgba(60, 70, 85, 0.8) !important;
+    border-radius: 12px !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    color: rgba(230, 235, 245, 0.95) !important;
+    backdrop-filter: blur(10px) !important;
+    margin: 4px !important;
+}
+
+.challenge-button:hover {
+    background: rgba(45, 52, 65, 0.98) !important;
+    border-color: rgba(100, 255, 218, 0.6) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3) !important;
+    color: rgba(245, 250, 255, 1) !important;
+    background: rgba(51, 65, 85, 0.7) !important;
+}
+
+/* Challenge Button Inner Content - High Contrast Titles */
+.challenge-button .challenge-inner p {
+    font-family: 'Space Grotesk', sans-serif !important;
+    font-weight: 700 !important;
+    color: #ffffff !important;
+    font-size: 1.2rem !important;
+    letter-spacing: -0.02em !important;
+    margin-bottom: 0.5rem !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+.challenge-button .challenge-inner span {
+    color: var(--accent-color) !important;
+    font-weight: 600 !important;
+    font-size: 1rem !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* Solved Challenge State - Enhanced Visibility */
+.challenge-button.challenge-solved {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.35) 0%, rgba(22, 163, 74, 0.25) 100%) !important;
+    border: 2px solid rgba(34, 197, 94, 0.8) !important;
+    color: rgba(240, 253, 244, 0.95) !important;
+}
+
+.challenge-button.challenge-solved:hover {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.45) 0%, rgba(22, 163, 74, 0.35) 100%) !important;
+    border-color: rgba(34, 197, 94, 0.9) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 20px rgba(34, 197, 94, 0.3) !important;
+}
+
+.challenge-button.challenge-solved .challenge-inner p,
+.challenge-button.challenge-solved .challenge-inner h3 {
+    color: rgba(240, 253, 244, 1) !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Enhanced spacing and layout for challenge grid */
+.challenges-row .col-sm-6 {
+    transition: all 0.2s ease;
+    padding: 0.75rem !important;
+}
+
+.challenges-row .col-md-4 {
+    padding: 0.75rem !important;
+}
+
+.challenges-row .col-lg-3 {
+    padding: 0.75rem !important;
+}
+
+/* Subtle grid item animation */
+.challenges-row .col-sm-6:hover {
+    transform: scale(1.01);
+}
+
+/* Better spacing for challenge container */
+.challenges-row {
+    margin: -0.75rem !important;
+}
+
+/* ================================
+   EMAIL NOTIFICATION STYLING
+   ================================ */
+
+/* Email Verification Nudge */
+.ctfdio-email-nudge {
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: 2000 !important;
+    max-width: 420px !important;
+    margin: 0 !important;
+    padding: 1rem 1.25rem !important;
+    background: var(--glass-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 12px !important;
+    backdrop-filter: blur(20px) !important;
+    box-shadow: 0 8px 32px var(--shadow-elevated) !important;
+    color: var(--text-primary) !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 500 !important;
+    animation: slideUpNudge 0.4s ease-out !important;
+}
+
+@keyframes slideUpNudge {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(100px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+.ctfdio-email-nudge .btn-close {
+    background: none !important;
+    border: none !important;
+    color: var(--text-secondary) !important;
+    opacity: 0.7 !important;
+    padding: 0.25rem !important;
+    transition: var(--transition-smooth) !important;
+    border-radius: 4px !important;
+}
+
+.ctfdio-email-nudge .btn-close:hover {
+    opacity: 1 !important;
+    background: rgba(88, 166, 255, 0.1) !important;
+}
+
+.ctfdio-email-nudge a {
+    color: var(--accent-color) !important;
+    text-decoration: none !important;
+    font-weight: 600 !important;
+    border-bottom: 1px solid transparent !important;
+    transition: var(--transition-smooth) !important;
+}
+
+.ctfdio-email-nudge a:hover {
+    color: var(--accent-secondary) !important;
+    border-bottom-color: var(--accent-secondary) !important;
+}
+
+/* ================================
+   CHALLENGE CONNECTION INFO
+   ================================ */
+
+#docker_container, .challenge-connection-info {
+    background: var(--glass-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 12px !important;
+    padding: 1.5rem !important;
+    margin: 1.5rem 0 !important;
+    backdrop-filter: blur(10px) !important;
+    color: var(--text-primary) !important;
+    box-shadow: 0 2px 8px var(--shadow-color);
+}
+
+#docker_container pre {
+    background: var(--tertiary-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    padding: 1rem !important;
+    color: var(--text-primary) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 0.9rem !important;
+    line-height: 1.6 !important;
+    box-shadow: inset 0 2px 4px var(--shadow-color);
+    margin: 0.5rem 0 !important;
+}
+
+.challenge-connection-info a {
+    color: var(--accent-color) !important;
+    text-decoration: none !important;
+    font-weight: 600 !important;
+    padding: 0.4rem 0.8rem !important;
+    border-radius: 8px !important;
+    background: rgba(88, 166, 255, 0.1) !important;
+    border: 1px solid rgba(88, 166, 255, 0.2) !important;
+    transition: var(--transition-smooth) !important;
+    display: inline-block !important;
+    margin: 0.25rem !important;
+}
+
+.challenge-connection-info a:hover {
+    background: var(--accent-color) !important;
+    color: var(--primary-bg) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(88, 166, 255, 0.3);
+}
+
+/* ================================
+   ENHANCED TYPOGRAPHY
+   ================================ */
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+    letter-spacing: -0.025em !important;
+    margin-bottom: 1rem !important;
+}
+
+.display-1, .display-2, .display-3, .display-4 {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 700 !important;
+}
+
+/* Breadcrumbs */
+.breadcrumb {
+    background: var(--glass-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    padding: 0.75rem 1rem !important;
+    margin-bottom: 1.5rem !important;
+    backdrop-filter: blur(10px) !important;
+}
+
+.breadcrumb-item {
+    color: var(--text-secondary) !important;
+    font-weight: 500 !important;
+}
+
+.breadcrumb-item.active {
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+}
+
+.breadcrumb-item a {
+    color: var(--accent-color) !important;
+    text-decoration: none !important;
+    transition: var(--transition-smooth) !important;
+}
+
+.breadcrumb-item a:hover {
+    color: var(--accent-secondary) !important;
+}
+
+/* ================================
+   PAGINATION
+   ================================ */
+
+.pagination {
+    margin: 2rem 0 !important;
+}
+
+.page-link {
+    background: var(--glass-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+    padding: 0.6rem 1rem !important;
+    margin: 0 0.125rem !important;
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    transition: var(--transition-smooth) !important;
+    backdrop-filter: blur(10px) !important;
+}
+
+.page-link:hover {
+    background: var(--accent-color) !important;
+    border-color: var(--accent-color) !important;
+    color: var(--primary-bg) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(88, 166, 255, 0.3);
+}
+
+.page-item.active .page-link {
+    background: var(--gradient-accent) !important;
+    border-color: var(--accent-color) !important;
+    color: var(--primary-bg) !important;
+    font-weight: 600 !important;
+}
+
+.page-item.disabled .page-link {
+    opacity: 0.5 !important;
+    pointer-events: none !important;
+}
+
+/* ================================
+   DROPDOWN MENUS
+   ================================ */
+
+.dropdown-menu {
+    background: var(--glass-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 12px !important;
+    backdrop-filter: blur(20px) !important;
+    box-shadow: 0 8px 32px var(--shadow-elevated) !important;
+    padding: 0.5rem !important;
+}
+
+.dropdown-item {
+    color: var(--text-primary) !important;
+    padding: 0.6rem 1rem !important;
+    border-radius: 8px !important;
+    margin: 0.125rem 0 !important;
+    font-weight: 500 !important;
+    transition: var(--transition-smooth) !important;
+}
+
+.dropdown-item:hover {
+    background: rgba(88, 166, 255, 0.1) !important;
+    color: var(--accent-color) !important;
+}
+
+.dropdown-item.active {
+    background: var(--gradient-accent) !important;
+    color: var(--primary-bg) !important;
+}
+
+/* ================================
+   BADGES AND LABELS
+   ================================ */
+
+.badge:not(.jumbotron .badge) {
+    font-weight: 600 !important;
+    padding: 0.4rem 0.8rem !important;
+    border-radius: 6px !important;
+    font-size: 0.8rem !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+.badge-primary {
+    background: var(--gradient-accent) !important;
+    color: var(--primary-bg) !important;
+}
+
+.badge-success {
+    background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+    color: white !important;
+}
+
+.badge-danger {
+    background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+    color: white !important;
+}
+
+.badge-warning {
+    background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+    color: white !important;
+}
+
+.badge-info {
+    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+    color: white !important;
+}
+
+/* ================================
+   LOADING STATES
+   ================================ */
+
+.loading {
+    opacity: 0.7 !important;
+    pointer-events: none !important;
+    position: relative !important;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid transparent;
+    border-top: 2px solid var(--accent-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    z-index: 10;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ================================
+   RESPONSIVE ENHANCEMENTS
+   ================================ */
+
+@media (max-width: 768px) {
+    .table {
+        font-size: 0.85rem;
+    }
+    
+    .table thead th, .table tbody td {
+        padding: 0.5rem 0.375rem !important;
+    }
+    
+    .ctfdio-email-nudge {
+        left: 1rem !important;
+        right: 1rem !important;
+        transform: none !important;
+        max-width: none !important;
+    }
+    
+    .badge:not(.jumbotron .badge) {
+        font-size: 0.7rem !important;
+        padding: 0.3rem 0.6rem !important;
+    }
+}
+
+/* ================================
+   SELECTION AND FOCUS STATES
+   ================================ */
+
+::selection {
+    background: rgba(88, 166, 255, 0.3) !important;
+    color: var(--text-primary) !important;
+}
+
+*:focus {
+    outline: 2px solid var(--accent-color) !important;
+    outline-offset: 2px !important;
+}
+
+.table tbody tr:focus {
+    outline: 2px solid var(--accent-color) !important;
+    outline-offset: -2px !important;
+}
+
+
+.jumbotron {
+    background-color: var(--tertiary-bg) !important;
+    color: var(--text-primary) !important;
+    padding: 1.5rem !important;
+    margin: 0 0 2rem 0 !important;
+    text-align: center !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    box-sizing: border-box !important;
+    line-height: 1.2 !important;
+    min-height: auto !important;
+    max-height: none !important;
+    height: auto !important;
+    display: block !important;
+    position: relative !important;
+    overflow: visible !important;
+}
+
+/* Jumbotron Headings */
+.jumbotron h1 {
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    padding: 0.2rem 0 !important;
+    font-weight: bold !important;
+    font-size: 2.5rem !important;
+    display: block !important;
+    border: none !important;
+    background: none !important;
+}
+
+/* Jumbotron Subheadings */
+div.jumbotron div.container h2 {
+    font-size: 1.75rem !important;
+    margin: 0.4rem 0 !important;
+}
+
+div.jumbotron div.container h3 {
+    font-size: 1.25rem !important;
+    margin: 0.25rem 0 !important;
+}
+
+/* Jumbotron Badges */
+.jumbotron .badge {
+    font-size: 1.1rem;
+    padding: 0.55rem 0.85rem;
+    line-height: 1.3;
+    font-weight: 500;
+    border-radius: 0.375rem;
+    font-family: 'Inter', sans-serif;
+}
+
+/* ================================
+   HOMEPAGE STYLING
+   ================================ */
+
+/* Homepage Fullscreen Layout */
+body:has(.homepage-wrapper) {
+    height: 100vh !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+body:has(.homepage-wrapper) html {
+    height: 100vh !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+body:has(.homepage-wrapper) main {
+    height: 100vh !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Homepage Wrapper */
+.homepage-wrapper {
+    width: 100vw;
+    height: 100vh;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, var(--primary-bg) 0%, var(--secondary-bg) 100%);
+    position: relative;
+}
+
+/* Homepage Bootstrap Grid Override */
+.homepage-wrapper .row {
+    margin: 0 !important;
+    --bs-gutter-x: 0 !important;
+    --bs-gutter-y: 0 !important;
+    width: 100%;
+    min-height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Homepage Content Layout */
+.homepage-wrapper .col-md-6.offset-md-3 {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 2rem !important;
+    flex: none !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    height: auto;
+    min-height: auto;
+}
+
+/* Homepage Content Spacing */
+.homepage-wrapper * {
+    margin-top: 0.4rem !important;
+    margin-bottom: 0.4rem !important;
+}
+
+.homepage-wrapper .jumbotron * {
+    margin: 0.3rem 0 !important;
+    padding: 0.2rem 0 !important;
+}
+
+.homepage-wrapper h1,
+.homepage-wrapper h2, 
+.homepage-wrapper h3,
+.homepage-wrapper h4,
+.homepage-wrapper h5,
+.homepage-wrapper h6 {
+    line-height: 1.3 !important;
+    margin: 0.3rem 0 !important;
+    padding: 0.2rem 0 !important;
+}
+
+.homepage-wrapper p,
+.homepage-wrapper div,
+.homepage-wrapper span {
+    line-height: 1.4 !important;
+    margin: 0.3rem 0 !important;
+    padding: 0.1rem 0 !important;
+}
+
+/* Jumbotron Container Reset */
+.jumbotron .container {
+    margin: 0 auto !important;
+    padding: 0 !important;
+    line-height: inherit !important;
+    font-family: inherit !important;
+}
+
+/* Responsive Jumbotron */
+@media (min-width: 576px) {
+    .jumbotron {
+        padding: 2rem;
+    }
+}
+
+.footer a {
+    color: var(--text-secondary) !important;
+}
+
+.footer a:hover {
+    color: var(--accent-color) !important;
+}
+
+.footer small {
+    color: var(--text-muted) !important;
+}
+
+/* Enhanced Form Select Styling */
+.form-select {
+    color: var(--text-primary) !important;
+    background: var(--glass-bg) !important;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%2358a6ff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e") !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 10px !important;
+    backdrop-filter: blur(10px) !important;
+    transition: all 0.2s ease !important;
+    font-weight: 500 !important;
+    padding: 0.5rem 2.5rem 0.5rem 0.75rem !important;
+    background-repeat: no-repeat !important;
+    background-position: right 0.75rem center !important;
+    background-size: 16px 12px !important;
+}
+
+.form-select:focus {
+    color: var(--text-primary) !important;
+    background: var(--glass-bg) !important;
+    border-color: var(--accent-color) !important;
+    box-shadow: 0 0 0 0.2rem rgba(88, 166, 255, 0.15) !important;
+    outline: none !important;
+    transform: translateY(-1px) !important;
+}
+
+.form-select option {
+    background: var(--secondary-bg) !important;
+    color: var(--text-primary) !important;
+    padding: 0.5rem !important;
+}
+
+/* Light theme text visibility fixes */
+[data-bs-theme="light"] .navbar-brand,
+[data-bs-theme="light"] .navbar-nav .nav-link,
+[data-bs-theme="light"] .table,
+[data-bs-theme="light"] .card,
+[data-bs-theme="light"] .jumbotron,
+[data-bs-theme="light"] .footer,
+[data-bs-theme="light"] h1,
+[data-bs-theme="light"] h2,
+[data-bs-theme="light"] h3,
+[data-bs-theme="light"] h4,
+[data-bs-theme="light"] h5,
+[data-bs-theme="light"] h6,
+[data-bs-theme="light"] p,
+[data-bs-theme="light"] div,
+[data-bs-theme="light"] span {
+    color: var(--text-primary) !important;
+}
+
+[data-bs-theme="light"] .navbar-nav .nav-link:hover {
+    color: var(--accent-color) !important;
+}
+
+[data-bs-theme="light"] .table thead th {
+    color: var(--text-primary) !important;
+    background: var(--card-bg) !important;
+}
+
+[data-bs-theme="light"] .table tbody td {
+    color: var(--text-primary) !important;
+    background: var(--card-bg) !important;
+}
+
+/* Professional table row striping */
+.table tbody tr:nth-child(even) {
+    background: rgba(88, 166, 255, 0.02) !important;
+}
+
+.table tbody tr:nth-child(even) td {
+    background: rgba(88, 166, 255, 0.02) !important;
+}
+
+/* Enhanced challenge cards - Override with stronger contrast */
+.challenge-card, .challenge-button {
+    background: rgba(30, 35, 45, 0.95) !important;
+    border: 2px solid rgba(60, 70, 85, 0.8) !important;
+    color: rgba(230, 235, 245, 0.95) !important;
+    transition: all 0.2s ease !important;
+}
+
+.challenge-card:hover, .challenge-button:hover {
+    background: rgba(45, 52, 65, 0.98) !important;
+    border-color: rgba(100, 255, 218, 0.6) !important;
+    color: rgba(245, 250, 255, 1) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Accessibility improvements */
+*:focus-visible {
+    outline: 2px solid var(--accent-color) !important;
+    outline-offset: 2px !important;
+    border-radius: 4px !important;
+}
+
+/* ================================
+   TEAM PAGE & USER PROFILE ENHANCEMENTS
+   ================================ */
+
+/* Team/User name styling - REVERTED to normal sizes */
+.team-name, .user-name, h1.team-name, h1.user-name {
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-secondary) 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+    font-weight: 700 !important;
+    font-family: 'Space Grotesk', -apple-system, sans-serif !important;
+    font-size: 2.5rem !important;
+    margin-bottom: 1rem !important;
+    text-align: center !important;
+    letter-spacing: -0.025em !important;
+}
+
+/* Fix text center alignment hierarchy */
+.text-center h1, .text-center .display-4, .text-center > h1 {
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-secondary) 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+    font-weight: 700 !important;
+    font-family: 'Space Grotesk', -apple-system, sans-serif !important;
+    font-size: 2.5rem !important;
+    margin-bottom: 1.5rem !important;
+}
+
+/* Team/User status badges - REVERTED to normal size */
+.badge.onsite, .badge.online {
+    background: linear-gradient(135deg, var(--accent-color), var(--accent-secondary)) !important;
+    color: var(--primary-bg) !important;
+    padding: 0.5rem 1rem !important;
+    border-radius: 25px !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    font-size: 0.75rem !important;
+    letter-spacing: 0.05em !important;
+    box-shadow: 0 2px 8px rgba(100, 255, 218, 0.3) !important;
+    margin: 1rem 0 !important;
+    display: inline-block !important;
+    font-family: 'Inter', sans-serif !important;
+    transform: scale(1) !important;
+    transition: transform 0.2s ease !important;
+}
+
+.badge.onsite:hover, .badge.online:hover {
+    transform: scale(1.05) !important;
+    box-shadow: 0 4px 12px rgba(100, 255, 218, 0.4) !important;
+}
+
+/* Team/User profile container - REMOVED BROAD .row .col-md-6 CONFLICT */
+.team-profile, .user-profile {
+    background: var(--glass-bg) !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 16px !important;
+    padding: 2rem !important;
+    margin: 1rem 0 !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    box-shadow: 0 8px 32px var(--shadow-elevated) !important;
+}
+
+/* Team/User action buttons styling */
+.btn-group .btn, .team-actions .btn, .user-actions .btn {
+    background: var(--glass-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+    padding: 0.75rem 1.5rem !important;
+    border-radius: 12px !important;
+    margin: 0.25rem !important;
+    transition: var(--transition-smooth) !important;
+    backdrop-filter: blur(10px) !important;
+}
+
+.btn-group .btn:hover, .team-actions .btn:hover, .user-actions .btn:hover {
+    background: var(--accent-color) !important;
+    color: var(--primary-bg) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(100, 255, 218, 0.4) !important;
+    border-color: var(--accent-color) !important;
+}
+
+/* Team stats and information text - REMOVED CONFLICTING .col-md-6 p */
+.team-stats, .user-stats, .row p {
+    color: var(--text-secondary) !important;
+    font-size: 1.1rem !important;
+    line-height: 1.6 !important;
+    margin-bottom: 1rem !important;
+}
+
+/* Fix for center alignment in team/user pages */
+.text-center h1, .text-center .display-4, .text-center > h1 {
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-secondary) 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+    font-weight: 700 !important;
+    font-family: 'Space Grotesk', -apple-system, sans-serif !important;
+}
+
+/* Enhanced container for team/user pages */
+.container .row {
+    margin-top: 2rem !important;
+}
+
+.container .row .col-md-6 h4 {
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+    margin-bottom: 1rem !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* ================================
+   ENHANCED CHALLENGE TILES (from theme-header.css)
+   ================================ */
+
+/* Challenge Titles - Enhanced Contrast & Elegance */
+.challenge-title, .challenge-card h1, .challenge-card h2, .challenge-card h3,
+.challenge-card .card-title, .card-title, h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.25 !important;
+    margin-bottom: 0.75rem !important;
+    transition: color 0.2s ease;
+}
+
+.challenge-card h1, .challenge-card .card-title {
+    font-size: 1.4rem !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+}
+
+.challenge-card h2 {
+    font-size: 1.2rem !important;
+    font-weight: 500 !important;
+}
+
+.challenge-card h3, .challenge-card h4 {
+    font-size: 1.05rem !important;
+    font-weight: 500 !important;
+}
+
+/* Challenge Card Content */
+.challenge-card p, .card-text {
+    color: var(--text-secondary) !important;
+    font-size: 0.92rem !important;
+    line-height: 1.5 !important;
+    font-weight: 400 !important;
+    margin-bottom: 0.75rem !important;
+}
+
+/* Challenge Card Styling - FINAL OVERRIDE */
+.challenge-card, .challenge-button, .card {
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    backdrop-filter: blur(10px) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+/* CHALLENGE BUTTONS ONLY - Strong Contrast */
+.challenge-button {
+    background: rgba(25, 30, 40, 0.98) !important;
+    border: 2px solid rgba(55, 65, 80, 0.9) !important;
+    color: rgba(240, 245, 250, 0.95) !important;
+}
+
+/* Keep cards normal */
+.challenge-card, .card {
+    background: var(--card-bg) !important;
+}
+
+.challenge-card::before, .challenge-button::before, .card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--gradient-accent);
+    opacity: 0;
+    transition: var(--transition-smooth);
+}
+
+/* Different hover for challenge buttons vs cards */
+.challenge-button:hover {
+    background: rgba(40, 48, 65, 0.98) !important;
+    transform: translateY(-3px) !important;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4) !important;
+    border-color: rgba(100, 255, 218, 0.7) !important;
+    color: rgba(255, 255, 255, 1) !important;
+}
+
+.challenge-card:hover, .card:hover {
+    transform: translateY(-4px) scale(1.02) !important;
+    box-shadow: 0 12px 25px var(--shadow-elevated), 0 5px 10px var(--shadow-color) !important;
+    border-color: var(--border-hover) !important;
+}
+
+.challenge-button:hover::before {
+    opacity: 0.8;
+}
+
+.challenge-card:hover::before, .card:hover::before {
+    opacity: 0.6;
+}
+
+/* Enhanced buttons */
+.btn-primary {
+    background: var(--gradient-accent) !important;
+    color: var(--primary-bg) !important;
+    border: none !important;
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    letter-spacing: 0.025em !important;
+    transition: var(--transition-bounce) !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px) scale(1.05) !important;
+    box-shadow: 0 8px 20px rgba(100, 255, 218, 0.4) !important;
+}
+    </style>
+  {% endblock %}
+
+  {{ Plugins.styles }}
+
+  {{ Assets.js("assets/js/color_mode_switcher.js", type=None) }}
+
+  <script type="text/javascript">
+      window.init = {
+          'urlRoot': "{{ request.script_root }}",
+          'csrfNonce': "{{ Session.nonce }}",
+          'userMode': "{{ Configs.user_mode }}",
+          'userId': {{ Session.id }},
+          'userName': {{ User.name | tojson }},
+          'userEmail': {{ User.email | tojson }},
+          'userVerified': {{ User.verified | tojson }},
+          'teamId': {{ Team.id | tojson }},
+          'teamName': {{ Team.name | tojson }},
+          'start': {{ Configs.start | tojson }},
+          'end': {{ Configs.end | tojson }},
+          'themeSettings': {{ Configs.theme_settings | tojson }},
+          'eventSounds': [
+            "/themes/core/static/sounds/notification.webm",
+            "/themes/core/static/sounds/notification.mp3",
+          ],
+      }
+  </script>
+
+  {{ Configs.theme_header }}
+</head>
+<body>
+{% include "components/navbar.html" %}
+
+<main role="main">
+  {% block content %}
+  {% endblock %}
+</main>
+
+{% include "components/snackbar.html" %}
+
+<footer class="footer">
+  <div class="container text-center">
+    <a href="https://ctfd.io" class="text-secondary">
+      <small class="text-muted">
+        {% trans %}Powered by CTFd{% endtrans %}
+      </small>
+    </a>
+  </div>
+</footer>
+
+{% include "components/notifications.html" %}
+
+{% block scripts %}
+  {{ Assets.js("assets/js/page.js") }}
+  <script>
+// Fractals Theme - Minimalist Geometric Animations
+(function() {
+    'use strict';
+    
+    // Create canvas for fractal background
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -1;
+        pointer-events: none;
+        opacity: 0.6;
+    `;
+    document.body.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d');
+    let geometricShapes = [];
+    let animationId;
+    let isVisible = true;
+    let time = 0;
+
+    // Performance optimization
+    let lastTime = 0;
+    const targetFPS = 30;
+    const frameInterval = 1000 / targetFPS;
+
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        initGeometricShapes();
+    }
+
+    // Create minimalist geometric shapes
+    function createGeometricShape() {
+        const shapes = ['triangle', 'hexagon', 'line'];
+        return {
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            size: Math.random() * 60 + 20,
+            type: shapes[Math.floor(Math.random() * shapes.length)],
+            rotation: Math.random() * Math.PI * 2,
+            rotationSpeed: (Math.random() - 0.5) * 0.01,
+            opacity: Math.random() * 0.1 + 0.05,
+            color: Math.random() > 0.5 ? '#58a6ff' : '#f78166'
+        };
+    }
+
+    function initGeometricShapes() {
+        geometricShapes = [];
+        const shapeCount = Math.min(6, Math.floor(canvas.width * canvas.height / 150000));
+        
+        for (let i = 0; i < shapeCount; i++) {
+            geometricShapes.push(createGeometricShape());
+        }
+    }
+
+    // Draw geometric shapes
+    function drawTriangle(x, y, size, rotation) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rotation);
+        ctx.beginPath();
+        ctx.moveTo(0, -size/2);
+        ctx.lineTo(-size/2, size/2);
+        ctx.lineTo(size/2, size/2);
+        ctx.closePath();
+        ctx.restore();
+    }
+
+    function drawHexagon(x, y, size, rotation) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rotation);
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3;
+            const px = Math.cos(angle) * size/2;
+            const py = Math.sin(angle) * size/2;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.restore();
+    }
+
+    function drawLine(x, y, size, rotation) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rotation);
+        ctx.beginPath();
+        ctx.moveTo(-size/2, 0);
+        ctx.lineTo(size/2, 0);
+        ctx.restore();
+    }
+
+    function animate(currentTime) {
+        if (currentTime - lastTime < frameInterval) {
+            animationId = requestAnimationFrame(animate);
+            return;
+        }
+        
+        lastTime = currentTime;
+        time += 0.01;
+
+        if (!isVisible) {
+            animationId = requestAnimationFrame(animate);
+            return;
+        }
+
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw and update geometric shapes
+        geometricShapes.forEach(shape => {
+            ctx.save();
+            
+            // Set style
+            ctx.globalAlpha = shape.opacity * (0.5 + 0.5 * Math.sin(time + shape.x * 0.01));
+            ctx.strokeStyle = shape.color;
+            ctx.lineWidth = 1;
+            ctx.fillStyle = 'transparent';
+
+            // Update rotation
+            shape.rotation += shape.rotationSpeed;
+
+            // Draw shape
+            switch(shape.type) {
+                case 'triangle':
+                    drawTriangle(shape.x, shape.y, shape.size, shape.rotation);
+                    ctx.stroke();
+                    break;
+                case 'hexagon':
+                    drawHexagon(shape.x, shape.y, shape.size, shape.rotation);
+                    ctx.stroke();
+                    break;
+                case 'line':
+                    drawLine(shape.x, shape.y, shape.size, shape.rotation);
+                    ctx.stroke();
+                    break;
+            }
+            
+            ctx.restore();
+        });
+
+        animationId = requestAnimationFrame(animate);
+    }
+
+    // Visibility API for performance
+    function handleVisibilityChange() {
+        isVisible = !document.hidden;
+        if (isVisible) {
+            animate(performance.now());
+        } else if (animationId) {
+            cancelAnimationFrame(animationId);
+        }
+    }
+
+    // Initialize
+    function init() {
+        resizeCanvas();
+        animate(performance.now());
+
+        // Event listeners
+        window.addEventListener('resize', resizeCanvas);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    // Wait for DOM to load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', function() {
+        if (animationId) {
+            cancelAnimationFrame(animationId);
+        }
+    });
+})();
+  </script>
+{% endblock %}
+
+{{ Plugins.scripts }}
+
+{{ Configs.theme_footer }}
+</body>
+</html>

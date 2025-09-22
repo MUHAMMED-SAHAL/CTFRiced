@@ -7,13 +7,8 @@ from flask import (
     redirect,
     render_template,
     request,
-            page = Pages(title=ctf_name, route="index", content="", draft=False, format="html")
-            default_ctf_banner_location = url_for("views.themes", path="img/logo.png")
-            ctf_banner = request.files.get("ctf_banner")
-            if ctf_banner:
-                f = upload_file(file=ctf_banner, page_id=page.id)
-                default_ctf_banner_location = url_for("views.files", path=f.location)
-                set_config("ctf_banner", f.location)
+    send_file,
+    session,
     url_for,
 )
 from jinja2.exceptions import TemplateNotFound
@@ -43,10 +38,10 @@ from CTFd.models import (
 from CTFd.utils import config, get_config, set_config
 from CTFd.utils import user as current_user
 from CTFd.utils import validators
-from CTFd.utils.config import can_send_mail, is_setup, is_teams_mode
+from CTFd.utils.config import can_send_mail, is_setup, is_teams_mode   
 from CTFd.utils.config.pages import build_markdown, get_page
 from CTFd.utils.config.visibility import challenges_visible
-from CTFd.utils.dates import ctf_ended, ctftime, view_after_ctf
+from CTFd.utils.dates import ctf_ended, ctftime, view_after_ctf        
 from CTFd.utils.decorators import authed_only
 from CTFd.utils.health import check_config, check_database
 from CTFd.utils.helpers import get_errors, get_infos, markup
@@ -75,8 +70,8 @@ def setup():
         if request.method == "POST":
             # General
             ctf_name = request.form.get("ctf_name")
-            ctf_description = request.form.get("ctf_description")
-            user_mode = request.form.get("user_mode", USERS_MODE)
+            ctf_description = request.form.get("ctf_description")      
+            user_mode = request.form.get("user_mode", USERS_MODE)      
             set_config("ctf_name", ctf_name)
             set_config("ctf_description", ctf_description)
             set_config("user_mode", user_mode)
@@ -97,10 +92,10 @@ def setup():
                     "score_visibility", default=ScoreVisibilityTypes.PUBLIC
                 )
             )
-            registration_visibility = RegistrationVisibilityTypes(
+            registration_visibility = RegistrationVisibilityTypes(     
                 request.form.get(
                     "registration_visibility",
-                    default=RegistrationVisibilityTypes.PUBLIC,
+                    default=RegistrationVisibilityTypes.PUBLIC,        
                 )
             )
             verify_emails = request.form.get("verify_emails")
@@ -113,12 +108,12 @@ def setup():
                 f = upload_file(file=ctf_logo)
                 set_config("ctf_logo", f.location)
 
-            ctf_small_icon = request.files.get("ctf_small_icon")
+            ctf_small_icon = request.files.get("ctf_small_icon")       
             if ctf_small_icon:
                 f = upload_file(file=ctf_small_icon)
                 set_config("ctf_small_icon", f.location)
 
-            theme = request.form.get("ctf_theme", DEFAULT_THEME)
+            theme = request.form.get("ctf_theme", DEFAULT_THEME)       
             set_config("ctf_theme", theme)
             theme_color = request.form.get("theme_color")
             theme_header = get_config("theme_header")
@@ -126,7 +121,7 @@ def setup():
                 # Uses {{ and }} to insert curly braces while using the format method
                 css = (
                     '<style id="theme-color">\n'
-                    ":root {{--theme-color: {theme_color};}}\n"
+                    ":root {{--theme-color: {theme_color};}}\n"        
                     ".navbar{{background-color: var(--theme-color) !important;}}\n"
                     ".jumbotron{{background-color: var(--theme-color) !important;}}\n"
                     "</style>\n"
@@ -159,16 +154,16 @@ def setup():
             pass_short = len(password) == 0
             pass_long = len(password) > 128
             valid_email = validators.validate_email(request.form["email"])
-            team_name_email_check = validators.validate_email(name)
+            team_name_email_check = validators.validate_email(name)    
 
             if not valid_email:
-                errors.append("Please enter a valid email address")
+                errors.append("Please enter a valid email address")    
             if names:
-                errors.append("That user name is already taken")
+                errors.append("That user name is already taken")       
             if team_name_email_check is True:
                 errors.append("Your user name cannot be an email address")
             if emails:
-                errors.append("That email has already been used")
+                errors.append("That email has already been used")      
             if pass_short:
                 errors.append("Pick a longer password")
             if pass_long:
@@ -197,7 +192,7 @@ def setup():
             default_ctf_banner_location = url_for("views.themes", path="img/logo.png")
             ctf_banner = request.files.get("ctf_banner")
             if ctf_banner:
-                f = upload_file(file=ctf_banner, page_id=page.id)
+                f = upload_file(file=ctf_banner, page_id=page.id)      
                 default_ctf_banner_location = url_for("views.files", path=f.location)
                 set_config("ctf_banner", f.location)
 
@@ -205,17 +200,17 @@ def setup():
             index = f"""
 <div class="row">
   <div class="col-md-6 offset-md-3 text-center">
-    <img 
-      src="{default_ctf_banner_location}" 
-      alt="H7CTF Banner" 
-      class="w-100 mx-auto d-block" 
-      style="max-width: 500px; padding: 50px; padding-top: 14vh;"
+    <img
+      src="{default_ctf_banner_location}"
+      alt="H7CTF Banner"
+      class="w-100 mx-auto d-block"
+      style="max-width: 500px; padding: 50px; padding-top: 14vh;"      
     />
     <h2 style="margin-top: 20px; font-weight: 700; letter-spacing: 2px;">
       H7CTF
     </h2>
-    <p style="font-size: 1.2rem; color: #888; margin-top: 10px;">
-      Test your skills. Prove your worth. Only the relentless survive.
+    <p style="font-size: 1.2rem; color: #888; margin-top: 10px;">      
+      Test your skills. Prove your worth. Only the relentless survive. 
     </p>
 
     <div style="margin-top: 20px;">
@@ -231,7 +226,7 @@ def setup():
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {{
-  const countdownElement = document.getElementById("countdown");
+  const countdownElement = document.getElementById("countdown");       
   const ctfStart = new Date("2025-10-11T09:00:00+05:30");
   const ctfEnd   = new Date("2025-10-12T21:00:00+05:30");
 
@@ -249,10 +244,10 @@ document.addEventListener("DOMContentLoaded", function() {{
     }}
 
     const distance = ctfStart - now;
-    const days     = Math.floor(distance / (1000 * 60 * 60 * 24));
+    const days     = Math.floor(distance / (1000 * 60 * 60 * 24));     
     const hours    = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutes  = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds  = Math.floor((distance % (1000 * 60)) / 1000);
+    const seconds  = Math.floor((distance % (1000 * 60)) / 1000);      
 
     countdownElement.textContent =
       `${{days}}d ${{hours}}h ${{minutes}}m ${{seconds}}s`;
@@ -269,7 +264,7 @@ document.addEventListener("DOMContentLoaded", function() {{
             # Visibility
             set_config(ConfigTypes.CHALLENGE_VISIBILITY, challenge_visibility)
             set_config(ConfigTypes.REGISTRATION_VISIBILITY, registration_visibility)
-            set_config(ConfigTypes.SCORE_VISIBILITY, score_visibility)
+            set_config(ConfigTypes.SCORE_VISIBILITY, score_visibility) 
             set_config(ConfigTypes.ACCOUNT_VISIBILITY, account_visibility)
 
             # Verify emails
@@ -334,11 +329,11 @@ def integrations():
 
         if state:
             if name == "mlc":
-                mlc_client_id = request.values.get("mlc_client_id")
+                mlc_client_id = request.values.get("mlc_client_id")    
                 mlc_client_secret = request.values.get("mlc_client_secret")
                 set_config("oauth_client_id", mlc_client_id)
-                set_config("oauth_client_secret", mlc_client_secret)
-                return render_template("admin/integrations.html")
+                set_config("oauth_client_secret", mlc_client_secret)   
+                return render_template("admin/integrations.html")      
             else:
                 abort(404)
         else:
@@ -374,7 +369,7 @@ def settings():
     prevent_name_change = get_config("prevent_name_change")
 
     if can_send_mail() and not user.verified:
-        confirm_url = markup(url_for("auth.confirm", flow="init"))
+        confirm_url = markup(url_for("auth.confirm", flow="init"))     
         infos.append(
             markup(
                 "Your email address isn't confirmed!<br>"
@@ -458,7 +453,7 @@ def files(path):
                         abort(403)
         else:
             # User cannot view challenges based on challenge visibility
-            # e.g. ctf requires registration but user isn't authed or
+            # e.g. ctf requires registration but user isn't authed or  
             # ctf requires admin account but user isn't admin
 
             # Allow downloads if a valid token is provided
@@ -467,7 +462,7 @@ def files(path):
             try:
                 data = unserialize(token, max_age=3600)
             # The token isn't expired or broken
-            except (BadTimeSignature, SignatureExpired, BadSignature):
+            except (BadTimeSignature, SignatureExpired, BadSignature): 
                 abort(403)
 
             # Determine the user and team asking to download
@@ -516,9 +511,9 @@ def files(path):
                 abort(403)
 
     elif f.type == "solution":
-        s = Solutions.query.filter_by(id=f.solution_id).first_or_404()
-        if s.state != "visible" or s.challenge.state != "visible":
-            # Admins can see solution files for preview purposes
+        s = Solutions.query.filter_by(id=f.solution_id).first_or_404() 
+        if s.state != "visible" or s.challenge.state != "visible":     
+            # Admins can see solution files for preview purposes       
             if current_user.is_admin() is True:
                 pass
             else:
@@ -540,10 +535,10 @@ def themes(theme, path):
     :return:
     """
     for cand_path in (
-        safe_join(app.root_path, "themes", cand_theme, "static", path)
+        safe_join(app.root_path, "themes", cand_theme, "static", path) 
         # The `theme` value passed in may not be the configured one, e.g. for
         # admin pages, so we check that first
-        for cand_theme in (theme, *config.ctf_theme_candidates())
+        for cand_theme in (theme, *config.ctf_theme_candidates())      
     ):
         # Handle werkzeug behavior of returning None on malicious paths
         if cand_path is None:
@@ -563,10 +558,10 @@ def themes_beta(theme, path):
     route will be removed.
     """
     for cand_path in (
-        safe_join(app.root_path, "themes", cand_theme, "static", path)
+        safe_join(app.root_path, "themes", cand_theme, "static", path) 
         # The `theme` value passed in may not be the configured one, e.g. for
         # admin pages, so we check that first
-        for cand_theme in (theme, *config.ctf_theme_candidates())
+        for cand_theme in (theme, *config.ctf_theme_candidates())      
     ):
         # Handle werkzeug behavior of returning None on malicious paths
         if cand_path is None:

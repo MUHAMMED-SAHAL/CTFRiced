@@ -198,61 +198,48 @@ def setup():
 
             # Splice in our banner
             index = f"""
-<div class="row">
-  <div class="col-md-6 offset-md-3 text-center">
-    <img
-      src="{default_ctf_banner_location}"
-      alt="H7CTF Banner"
-      class="w-100 mx-auto d-block"
-      style="max-width: 500px; padding: 50px; padding-top: 14vh;"      
-    />
-    <h2 style="margin-top: 20px; font-weight: 700; letter-spacing: 2px;">
-      H7CTF
-    </h2>
-    <p style="font-size: 1.2rem; color: #888; margin-top: 10px;">      
-      Test your skills. Prove your worth. Only the relentless survive. 
-    </p>
-
-    <div style="margin-top: 20px;">
-      <h4 id="countdown" style="font-weight: 600; color: #e74c3c;">Loading...</h4>
-    </div>
-
-    <div style="margin-top: 30px;">
-      <a href="/challenges" class="btn btn-primary btn-lg mx-2">Enter Arena</a>
-      <a href="/register" class="btn btn-outline-secondary btn-lg mx-2">Join Now</a>
-    </div>
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; min-height: 100vh; text-align: center; padding: 20px; box-sizing: border-box; overflow: hidden; transform: translateY(-30px);">
+  <img src="{default_ctf_banner_location}" alt="CTF Banner" style="max-width: 300px; width: 100%; margin-bottom: 25px;" />
+  
+  <div id="countdown" style="font-family: Courier; color: #64ffda; font-size: 1.5rem; margin-bottom: 35px;">Loading...</div>
+  
+  <div style="display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap;">
+    <a href="/challenges" style="background: #1e3a3a !important; color: #64ffda !important; padding: 14px 20px !important; text-decoration: none !important; border: 2px solid #64ffda !important; border-radius: 4px !important; font-weight: 600 !important; display: flex !important; justify-content: center !important; align-items: center !important; width: 140px !important; height: 20px !important; box-sizing: border-box !important; font-size: 13px !important; white-space: nowrap !important; transition: all 0.15s ease !important; letter-spacing: 1px !important; text-transform: uppercase !important; box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;" onmouseover="this.style.background='#2a4a4a'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.4)'; this.style.transform='translateY(-1px)'" onmouseout="this.style.background='#1e3a3a'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.3)'; this.style.transform='translateY(0)'" onmousedown="this.style.transform='translateY(1px) scale(0.98)'; this.style.boxShadow='0 1px 2px rgba(0,0,0,0.4)'" onmouseup="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.4)'">ENTER ARENA</a>
+    
+    <a href="/register" style="background: #3a1e1e !important; color: #ff6b6b !important; padding: 14px 20px !important; text-decoration: none !important; border: 2px solid #ff6b6b !important; border-radius: 4px !important; font-weight: 600 !important; display: flex !important; justify-content: center !important; align-items: center !important; width: 140px !important; height: 20px !important; box-sizing: border-box !important; font-size: 13px !important; white-space: nowrap !important; transition: all 0.15s ease !important; letter-spacing: 1px !important; text-transform: uppercase !important; box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;" onmouseover="this.style.background='#4a2a2a'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.4)'; this.style.transform='translateY(-1px)'" onmouseout="this.style.background='#3a1e1e'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.3)'; this.style.transform='translateY(0)'" onmousedown="this.style.transform='translateY(1px) scale(0.98)'; this.style.boxShadow='0 1px 2px rgba(0,0,0,0.4)'" onmouseup="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.4)'">JOIN NOW</a>
   </div>
 </div>
 
+<style>body {{ overflow: hidden !important; margin: 0 !important; padding: 0 !important; }} html {{ overflow: hidden !important; }}</style>
+
 <script>
 document.addEventListener("DOMContentLoaded", function() {{
-  const countdownElement = document.getElementById("countdown");       
-  const ctfStart = new Date("2025-10-11T09:00:00+05:30");
-  const ctfEnd   = new Date("2025-10-12T21:00:00+05:30");
-
+  var countdownElement = document.getElementById("countdown");
+  var ctfStart = new Date("2025-10-11T09:00:00+05:30");
+  var ctfEnd = new Date("2025-12-12T21:00:00+05:30");
+  
   function updateCountdown() {{
-    const now = new Date();
-
+    var now = new Date();
+    
     if (now >= ctfEnd) {{
-      countdownElement.innerHTML = "<span style='color: #95a5a6;'>ENDED</span>";
+      countdownElement.textContent = "ENDED";
       return;
     }}
-
+    
     if (now >= ctfStart) {{
-      countdownElement.innerHTML = "<span style='color: #2ecc71;'>LIVE</span>";
+      countdownElement.textContent = "LIVE";
       return;
     }}
-
-    const distance = ctfStart - now;
-    const days     = Math.floor(distance / (1000 * 60 * 60 * 24));     
-    const hours    = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes  = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds  = Math.floor((distance % (1000 * 60)) / 1000);      
-
-    countdownElement.textContent =
-      `${{days}}d ${{hours}}h ${{minutes}}m ${{seconds}}s`;
+    
+    var distance = ctfStart - now;
+    var days = Math.floor(distance / (1000 * 60 * 60 * 24));
+    var hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+    var seconds = Math.floor((distance % (1000 * 60)) / 1000);
+    
+    countdownElement.textContent = days + "D " + hours + "H " + minutes + "M " + seconds + "S";
   }}
-
+  
   updateCountdown();
   setInterval(updateCountdown, 1000);
 }});

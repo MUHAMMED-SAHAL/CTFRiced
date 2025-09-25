@@ -2535,6 +2535,7 @@ class DockerAPI(Resource):
                     current_app.logger.info(f"Calling get_repositories for server {server.name}")
                     images = get_repositories(server, tags=True, repos=server_repos, group_compose=True, challenge_id=challenge_id)
                     current_app.logger.info(f"get_repositories returned {len(images) if images else 0} items for server {server.name}")
+                    current_app.logger.info(f"Images from {server.name}: {images}")
 
                     if images:
                         for item in images:

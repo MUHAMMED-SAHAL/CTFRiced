@@ -1916,7 +1916,6 @@ class ContainerAPI(Resource):
     def get(self):
         try:
             container_display = request.args.get('name')
-            current_app.logger.info(f"ContainerAPI.get() called with container_display: '{container_display}'")
             
             if not container_display:
                 return {"success": False, "message": "No container specified"}, 403
@@ -1927,7 +1926,6 @@ class ContainerAPI(Resource):
             project_name = None
             
             # Detect multi-image format: "[MULTI] project_name (X images)"
-            current_app.logger.info(f"Checking multi-image patterns in: '{container_display}'")
             if container_display.startswith('[MULTI] ') or '(2 images)' in container_display or '(3 images)' in container_display:
                 is_multi_image = True
                 current_app.logger.info(f"✓ Detected multi-image container: {container_display}")
@@ -2064,19 +2062,8 @@ class ContainerAPI(Resource):
             # Check for existing container for this specific image/challenge
             # Also implement a basic rate limiting (minimum 30 seconds between requests)
             
-            # First check if team/user already has ANY active challenge running
-            # This enforces one-challenge-per-team restriction
-            if is_teams_mode():
-                any_active_container = DockerChallengeTracker.query.filter_by(team_id=session.id).first()
-            else:
-                any_active_container = DockerChallengeTracker.query.filter_by(user_id=session.id).first()
-            
-            if any_active_container:
-                # Check if the existing container is for a different challenge
-                if any_active_container.challenge != challenge:
-                    # Log as info since this is expected behavior, not an error
-                    current_app.logger.info(f"Team/User {session.id} attempted to start challenge '{challenge}' while already running '{any_active_container.challenge}'")
-                    return {"success": False, "message": f"You already have an active container for challenge '{any_active_container.challenge}'. Please stop it before starting a new challenge."}, 403
+            # Note: Removed one-challenge-per-team restriction to allow multiple concurrent challenges
+            # Teams can now run multiple challenge instances simultaneously
             
             # Now check for existing container for this specific challenge
             try:
@@ -2103,24 +2090,13 @@ class ContainerAPI(Resource):
                 traceback.print_exc()
                 check = None
             
-            # If this container is already created and not expired, return existing container info
+            # If this container is already created, check what action is requested
             instance_duration = get_instance_duration(challenge_id)
-            if check != None and not (unix_time(datetime.utcnow()) - int(check.timestamp)) >= instance_duration:
-                # Container exists and is not expired - return existing container info
-                display_host = check.docker_config.domain if check.docker_config and check.docker_config.domain else str(check.host)
-                port_list = check.ports.split(',') if check.ports else []
-                return {
-                    "success": True,
-                    "result": "Container already running",
-                    "hostname": display_host,
-                    "port": port_list[0] if port_list else None,
-                    "revert_time": check.revert_time,
-                    "existing": True
-                }
-            # Delete when requested
-            elif check != None and request.args.get('stopcontainer'):
+            
+            # Delete when requested (CHECK THIS FIRST, before checking expiration)
+            if check != None and request.args.get('stopcontainer'):
                 try:
-                    if is_multi_image or check.stack_id:
+                    if is_multi_image or (hasattr(check, 'stack_id') and check.stack_id):
                         # Multi-image challenge - delete entire stack
                         if check.stack_id and check.docker_config:
                             delete_compose_stack(check.docker_config, check.stack_id)
@@ -2130,13 +2106,14 @@ class ContainerAPI(Resource):
                         else:
                             DockerChallengeTracker.query.filter_by(user_id=session.id, challenge=challenge).delete()
                     else:
-                        # Single container
+                        # Single container - get the actual image name
+                        container_image = parse_image_name_from_display(container_display)
                         if check.docker_config:
                             delete_container(check.docker_config, check.instance_id)
                         if is_teams_mode():
-                            DockerChallengeTracker.query.filter_by(team_id=session.id).filter_by(docker_image=container).delete()
+                            DockerChallengeTracker.query.filter_by(team_id=session.id, challenge=challenge).delete()
                         else:
-                            DockerChallengeTracker.query.filter_by(user_id=session.id).filter_by(docker_image=container).delete()
+                            DockerChallengeTracker.query.filter_by(user_id=session.id, challenge=challenge).delete()
                     
                     db.session.commit()
                     return {"success": True, "result": "Container(s) stopped"}
@@ -2148,8 +2125,8 @@ class ContainerAPI(Resource):
             # The exception would be if we are reverting a box. So we'll delete it if it exists and has been around for more than the configured duration.
             elif check != None:
                 try:
-                    if is_multi_image or check.stack_id:
-                        # Multi-image challenge - delete entire stack
+                    if is_multi_image or (hasattr(check, 'stack_id') and check.stack_id):
+                        # Multi-image challenge - delete entire stack for revert
                         if check.stack_id and check.docker_config:
                             delete_compose_stack(check.docker_config, check.stack_id)
                         # Delete all containers for this challenge/stack
@@ -2158,19 +2135,34 @@ class ContainerAPI(Resource):
                         else:
                             DockerChallengeTracker.query.filter_by(user_id=session.id, challenge=challenge).delete()
                     else:
-                        # Single container  
+                        # Single container - get the actual image name for revert
+                        container_image = parse_image_name_from_display(container_display)
                         if check.docker_config:
                             delete_container(check.docker_config, check.instance_id)
                         if is_teams_mode():
-                            DockerChallengeTracker.query.filter_by(team_id=session.id).filter_by(docker_image=container).delete()
+                            DockerChallengeTracker.query.filter_by(team_id=session.id, challenge=challenge).delete()
                         else:
-                            DockerChallengeTracker.query.filter_by(user_id=session.id).filter_by(docker_image=container).delete()
+                            DockerChallengeTracker.query.filter_by(user_id=session.id, challenge=challenge).delete()
                     
                     db.session.commit()
                 except Exception as e:
                     current_app.logger.error(f"Error deleting existing container: {str(e)}")
                     import traceback
                     traceback.print_exc()
+            
+            # If container exists and is not expired, and no stop/revert was requested, return existing container info
+            elif check != None and not (unix_time(datetime.utcnow()) - int(check.timestamp)) >= instance_duration:
+                # Container exists and is not expired - return existing container info
+                display_host = check.docker_config.domain if check.docker_config and check.docker_config.domain else str(check.host)
+                port_list = check.ports.split(',') if check.ports else []
+                return {
+                    "success": True,
+                    "result": "Container already running",
+                    "hostname": display_host,
+                    "port": port_list[0] if port_list else None,
+                    "revert_time": check.revert_time,
+                    "existing": True
+                }
             
             # Check if a container is already running for this user. We need to recheck the DB first
             # Also clean up any expired containers (older than configured duration)
@@ -2214,10 +2206,7 @@ class ContainerAPI(Resource):
                     current_app.logger.error(f"Error removing expired container from DB: {str(e)}")
 
             # Check if this is a multi-image selection or challenge
-            current_app.logger.info(f"Multi-image check: is_multi_image={is_multi_image}, challenge_obj.challenge_type={getattr(challenge_obj, 'challenge_type', 'N/A')}")
-            
             if is_multi_image or (challenge_obj and challenge_obj.challenge_type == 'multi' and challenge_obj.docker_images):
-                current_app.logger.info("✓ Taking MULTI-IMAGE path")
                 # Multi-image challenge - use compose stack creation
                 try:
                     # Use actual images from server if we detected multi-image selection
@@ -2280,7 +2269,6 @@ class ContainerAPI(Resource):
                     return {"success": False, "message": f"Failed to create container stack: {str(e)}"}, 500
 
             # Single image challenge - use original logic
-            current_app.logger.info("✓ Taking SINGLE-IMAGE path")
             if not is_multi_image:
                 # Get ports and create container
                 try:

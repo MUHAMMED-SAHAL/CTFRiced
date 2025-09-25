@@ -221,13 +221,31 @@ function get_docker_status(container) {
                     }
 
                     if (distance > 0) {
-                        // Update countdown
+                        // Update countdown with stop/revert buttons
                         timerElement.html(`
                             <div class="timer-context" style="font-size: 13px; color: #d1d5db; margin-bottom: 6px;">
                                 Container will auto-stop in:
                             </div>
-                            <div class="docker-timer" style="font-size: 18px; font-weight: 700; color: #ffffff;">
+                            <div class="docker-timer" style="font-size: 18px; font-weight: 700; color: #ffffff; margin-bottom: 12px;">
                                 ${minutes}:${seconds}
+                            </div>
+                            <div class="action-buttons" style="display: flex; gap: 10px; justify-content: center; align-items: center;">
+                                <button onclick="revert_container('${containerInfo.docker_image}');" style="
+                                    background: #1e40af;
+                                    border: none; border-radius: 4px; color: #ffffff;
+                                    padding: 8px 14px; font-size: 12px; font-weight: 500;
+                                    cursor: pointer; min-width: 80px; text-align: center;
+                                    display: flex; align-items: center; justify-content: center;">
+                                    <i class="fas fa-redo" style="margin-right: 4px; font-size: 10px;"></i> Revert
+                                </button>
+                                <button onclick="stop_container('${containerInfo.docker_image}');" style="
+                                    background: #dc2626;
+                                    border: none; border-radius: 4px; color: #ffffff;
+                                    padding: 8px 14px; font-size: 12px; font-weight: 500;
+                                    cursor: pointer; min-width: 80px; text-align: center;
+                                    display: flex; align-items: center; justify-content: center;">
+                                    <i class="fas fa-stop" style="margin-right: 4px; font-size: 10px;"></i> Stop
+                                </button>
                             </div>
                         `);
                     } else {
@@ -242,7 +260,7 @@ function get_docker_status(container) {
                                     <div class="timer-section" style="display: flex; justify-content: center; align-items: center; width: 100%;">
                                         <div class="docker-actions" style="display: flex; justify-content: center; align-items: center; width: 100%;">
                                             <div class="action-buttons" style="display: flex; gap: 15px; justify-content: center; align-items: center;">
-                                                <button onclick="start_container('${containerInfo.docker_image}');" style="
+                                                <button onclick="revert_container('${containerInfo.docker_image}');" style="
                                                     background: #1e40af;
                                                     border: none; border-radius: 4px; color: #ffffff;
                                                     padding: 10px 18px; font-size: 13px; font-weight: 500;
@@ -298,6 +316,21 @@ function get_docker_status(container) {
 
 function stop_container(container) {
     if (confirm("Are you sure you want to stop the container for: \n" + CTFd._internal.challenge.data.name)) {
+        // Show loading state immediately
+        const loadingHTML = `
+            <div class="docker-control-panel">
+                <div class="docker-content">
+                    <div class="docker-loading" style="text-align:center; padding: 10px;">
+                        <div class="loading-spinner" style="margin-bottom: 6px;">
+                            <i class="fas fa-spinner fa-spin" style="font-size: 20px; color: #1f2937;"></i>
+                        </div>
+                        <div class="loading-text" style="font-size: 12px; color: #6b7280;">Stopping container...</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        CTFd.lib.$('#docker_container').html(loadingHTML);
+        
         CTFd.fetch("/api/v1/container?name=" + encodeURIComponent(container) + 
                    "&challenge=" + encodeURIComponent(CTFd._internal.challenge.data.name) + 
                    "&stopcontainer=True", {
@@ -305,13 +338,19 @@ function stop_container(container) {
         })
         .then(function (response) {
             return response.json().then(function (json) {
-                if (response.ok) {
+                if (response.ok && json.success) {
+                    // Clear any existing timers for this container
+                    if (statusIntervals[container]) {
+                        clearInterval(statusIntervals[container]);
+                        delete statusIntervals[container];
+                    }
+                    
                     updateWarningModal({
                         title: "Success",
                         warningText: "Container for <strong>" + CTFd._internal.challenge.data.name + "</strong> was stopped successfully.",
                         buttonText: "Close",
                         onClose: function () {
-                            get_docker_status(container);  // ← Will be called when modal is closed
+                            resetToNormalState(container);  // Reset UI to launch button
                         }
                     });
                 } else {
@@ -325,12 +364,96 @@ function stop_container(container) {
                 warningText: error.message || "An error occurred while stopping the container.",
                 buttonText: "Close",
                 onClose: function () {
-                    get_docker_status(container);  // ← Will be called when modal is closed
+                    get_docker_status(container);  // Refresh status on error
                 }
             });
-
         });
     }
+}
+
+function revert_container(container) {
+    // Show loading state immediately
+    const loadingHTML = `
+        <div class="docker-control-panel">
+            <div class="docker-content">
+                <div class="docker-loading" style="text-align:center; padding: 10px;">
+                    <div class="loading-spinner" style="margin-bottom: 6px;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 20px; color: #1f2937;"></i>
+                    </div>
+                    <div class="loading-text" style="font-size: 12px; color: #6b7280;">Reverting container...</div>
+                </div>
+            </div>
+        </div>
+    `;
+    CTFd.lib.$('#docker_container').html(loadingHTML);
+    
+    // First, stop the existing container
+    CTFd.fetch("/api/v1/container?name=" + encodeURIComponent(container) + 
+               "&challenge=" + encodeURIComponent(CTFd._internal.challenge.data.name) + 
+               "&stopcontainer=True", {
+        method: "GET"
+    })
+    .then(function (response) {
+        return response.json().then(function (json) {
+            if (response.ok && json.success) {
+                // Clear any existing timers for this container
+                if (statusIntervals[container]) {
+                    clearInterval(statusIntervals[container]);
+                    delete statusIntervals[container];
+                }
+                
+                // Now start a new container
+                CTFd.fetch("/api/v1/container?name=" + encodeURIComponent(container) + 
+                          "&challenge=" + encodeURIComponent(CTFd._internal.challenge.data.name), {
+                    method: "GET"
+                })
+                .then(function (startResponse) {
+                    if (startResponse.ok) {
+                        return startResponse.json().then(function (startJson) {
+                            if (startJson.success) {
+                                get_docker_status(container);
+                                
+                                // Get instance duration from challenge data, default to 15 minutes
+                                const instanceDuration = CTFd._internal.challenge.data.instance_duration || 15;
+                                
+                                updateWarningModal({
+                                    title: "Container Reverted",
+                                    warningText: `Your challenge container has been reverted and restarted.<br><small>Restart or stop actions are limited to once every ${instanceDuration} minutes.</small>`,
+                                    buttonText: "Close"
+                                });
+                            } else {
+                                throw new Error(startJson.message || 'Failed to start new container');
+                            }
+                        });
+                    } else {
+                        throw new Error('Failed to start new container');
+                    }
+                })
+                .catch(function (startError) {
+                    updateWarningModal({
+                        title: "Revert Failed",
+                        warningText: "Container was stopped but failed to restart: " + (startError.message || "Unknown error"),
+                        buttonText: "Close",
+                        onClose: function () {
+                            resetToNormalState(container);
+                        }
+                    });
+                });
+            } else {
+                throw new Error(json.message || 'Failed to stop existing container');
+            }
+        });
+    })
+    .catch(function (error) {
+        updateWarningModal({
+            title: "Revert Failed",
+            warningText: "Failed to stop existing container: " + (error.message || "Unknown error"),
+            buttonText: "Close",
+            onClose: function () {
+                get_docker_status(container);  // Refresh status on error
+            }
+        });
+    });
 }
 
 function start_container(container) {

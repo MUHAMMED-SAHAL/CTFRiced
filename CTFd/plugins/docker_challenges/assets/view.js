@@ -72,9 +72,9 @@ function get_docker_status(container) {
         
 
         if (containerFound && containerInfo) {
-            // Check if container has expired (5+ minutes old)
+            // Check if container has expired by comparing with revert_time
             var currentTime = Math.floor(Date.now() / 1000);
-            var containerAge = currentTime - parseInt(containerInfo.timestamp);
+            var is_expired = currentTime >= parseInt(containerInfo.revert_time);
             
             if (is_expired) {
                 containerFound = false;

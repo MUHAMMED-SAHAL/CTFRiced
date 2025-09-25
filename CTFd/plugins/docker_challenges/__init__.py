@@ -502,11 +502,31 @@ class KillContainerAPI(Resource):
             docker_tracker = DockerChallengeTracker.query.all()
             
             if full == "true":
+                # Delete all containers
+                stacks_to_delete = set()  # Track unique stack IDs
+                singles_to_delete = []    # Track single containers
+                
                 for c in docker_tracker:
+                    if c.stack_id:
+                        stacks_to_delete.add(c.stack_id)
+                    else:
+                        singles_to_delete.append(c)
+                
+                # Delete all compose stacks
+                for stack_id in stacks_to_delete:
+                    try:
+                        stack_containers = DockerChallengeTracker.query.filter_by(stack_id=stack_id).first()
+                        if stack_containers and stack_containers.docker_config:
+                            delete_compose_stack(stack_containers.docker_config, stack_id)
+                    except Exception as e:
+                        current_app.logger.error(f"Error deleting stack {stack_id}: {str(e)}")
+                        continue
+                
+                # Delete single containers
+                for c in singles_to_delete:
                     try:
                         if c.docker_config:
                             delete_container(c.docker_config, c.instance_id)
-                        # Delete the tracker record individually
                         tracker_to_delete = DockerChallengeTracker.query.filter_by(instance_id=c.instance_id).first()
                         if tracker_to_delete:
                             db.session.delete(tracker_to_delete)
@@ -518,13 +538,29 @@ class KillContainerAPI(Resource):
             elif container != 'null' and container in [c.instance_id for c in docker_tracker]:
                 try:
                     container_to_delete = DockerChallengeTracker.query.filter_by(instance_id=container).first()
-                    if container_to_delete and container_to_delete.docker_config:
-                        delete_container(container_to_delete.docker_config, container)
-                    # Delete the tracker record individually
-                    tracker_to_delete = DockerChallengeTracker.query.filter_by(instance_id=container).first()
-                    if tracker_to_delete:
-                        db.session.delete(tracker_to_delete)
-                    db.session.commit()
+                    if not container_to_delete:
+                        return {"success": False, "message": "Container not found in tracker"}, 404
+                    
+                    # Check if this container is part of a compose stack
+                    if container_to_delete.stack_id:
+                        # This is part of a multi-image stack - delete the entire stack
+                        current_app.logger.info(f"Deleting compose stack {container_to_delete.stack_id} (triggered by container {container})")
+                        if container_to_delete.docker_config:
+                            success = delete_compose_stack(container_to_delete.docker_config, container_to_delete.stack_id)
+                            if not success:
+                                return {"success": False, "message": "Failed to delete compose stack"}, 500
+                        else:
+                            return {"success": False, "message": "No Docker config found for stack"}, 500
+                    else:
+                        # Single container - delete normally
+                        current_app.logger.info(f"Deleting single container {container}")
+                        if container_to_delete.docker_config:
+                            delete_container(container_to_delete.docker_config, container)
+                        tracker_to_delete = DockerChallengeTracker.query.filter_by(instance_id=container).first()
+                        if tracker_to_delete:
+                            db.session.delete(tracker_to_delete)
+                        db.session.commit()
+                        
                 except Exception as e:
                     current_app.logger.error(f"Error deleting container {container}: {str(e)}")
                     return {"success": False, "message": f"Error deleting container: {str(e)}"}, 500
@@ -1203,7 +1239,7 @@ def prevent_cross_challenge_contamination(compose_groups, challenge_id):
             # be more conservative about grouping
             if any(keyword in project_name.lower() for keyword in ['chal', 'challenge', 'ctf']):
                 # Only include if it's a very clear match (you could add more logic here)
-
+                pass  # Placeholder for future logic
             
             # Add warning to display name for unlabeled images
             if 'display_name' in data:
@@ -1880,6 +1916,8 @@ class ContainerAPI(Resource):
     def get(self):
         try:
             container_display = request.args.get('name')
+            current_app.logger.info(f"ContainerAPI.get() called with container_display: '{container_display}'")
+            
             if not container_display:
                 return {"success": False, "message": "No container specified"}, 403
             
@@ -1889,18 +1927,20 @@ class ContainerAPI(Resource):
             project_name = None
             
             # Detect multi-image format: "[MULTI] project_name (X images)"
+            current_app.logger.info(f"Checking multi-image patterns in: '{container_display}'")
             if container_display.startswith('[MULTI] ') or '(2 images)' in container_display or '(3 images)' in container_display:
                 is_multi_image = True
-
+                current_app.logger.info(f"✓ Detected multi-image container: {container_display}")
                 
                 # Extract project name - remove [MULTI], count info, and [Unlabeled] parts
                 project_name = container_display
                 project_name = project_name.replace('[MULTI] ', '')
                 project_name = project_name.split(' (')[0]  # Remove "(X images) [Unlabeled]" part
+                project_name = project_name.replace(' [Unlabeled]', '')  # Remove [Unlabeled] if present
                 project_name = project_name.strip()
-                
-
+                current_app.logger.info(f"✓ Extracted project name: '{project_name}'")
             else:
+                current_app.logger.info(f"✗ No multi-image pattern found, treating as single image")
                 # Parse the actual image name from the display format
                 container = parse_image_name_from_display(container_display)
                 
@@ -1939,10 +1979,13 @@ class ContainerAPI(Resource):
                         # Look for the compose group matching our project name
                         for repo_item in repositories:
                             if isinstance(repo_item, dict) and repo_item.get('type') == 'compose_group':
-                                if repo_item.get('name') == project_name or repo_item.get('project_name') == project_name:
+                                # Match by project name, name, or display name
+                                if (repo_item.get('name') == project_name or 
+                                    repo_item.get('project_name') == project_name or 
+                                    repo_item.get('display_name', '').startswith(project_name + ' (')):
                                     actual_images = repo_item.get('images', [])
                                     docker = server
-
+                                    current_app.logger.info(f"Found matching compose group: {repo_item.get('display_name')} with images: {actual_images}")
                                     break
                         
                         if actual_images:
@@ -1952,6 +1995,7 @@ class ContainerAPI(Resource):
                         continue
                 
                 if not docker or not actual_images:
+                    current_app.logger.error(f"Multi-image detection failed: docker={docker}, actual_images={actual_images}, project_name='{project_name}'")
                     return {"success": False, "message": f"No server found with multi-image group '{project_name}' or no images found"}, 500
             else:
                 # Single image - use original logic
@@ -2066,6 +2110,7 @@ class ContainerAPI(Resource):
                 display_host = check.docker_config.domain if check.docker_config and check.docker_config.domain else str(check.host)
                 port_list = check.ports.split(',') if check.ports else []
                 return {
+                    "success": True,
                     "result": "Container already running",
                     "hostname": display_host,
                     "port": port_list[0] if port_list else None,
@@ -2094,7 +2139,7 @@ class ContainerAPI(Resource):
                             DockerChallengeTracker.query.filter_by(user_id=session.id).filter_by(docker_image=container).delete()
                     
                     db.session.commit()
-                    return {"result": "Container(s) stopped"}
+                    return {"success": True, "result": "Container(s) stopped"}
                 except Exception as e:
                     current_app.logger.error(f"Error stopping container: {str(e)}")
                     import traceback
@@ -2169,7 +2214,10 @@ class ContainerAPI(Resource):
                     current_app.logger.error(f"Error removing expired container from DB: {str(e)}")
 
             # Check if this is a multi-image selection or challenge
+            current_app.logger.info(f"Multi-image check: is_multi_image={is_multi_image}, challenge_obj.challenge_type={getattr(challenge_obj, 'challenge_type', 'N/A')}")
+            
             if is_multi_image or (challenge_obj and challenge_obj.challenge_type == 'multi' and challenge_obj.docker_images):
+                current_app.logger.info("✓ Taking MULTI-IMAGE path")
                 # Multi-image challenge - use compose stack creation
                 try:
                     # Use actual images from server if we detected multi-image selection
@@ -2177,7 +2225,8 @@ class ContainerAPI(Resource):
                     images_to_use = actual_images if is_multi_image else challenge_obj.docker_images
                     primary_service = challenge_obj.primary_service if challenge_obj else None
                     
-
+                    current_app.logger.info(f"Creating multi-image stack with images: {images_to_use}")
+                    current_app.logger.info(f"Primary service: {primary_service}")
                     
                     stack_id, containers, primary_port, network_name = create_compose_stack(
                         docker=docker,
@@ -2186,6 +2235,8 @@ class ContainerAPI(Resource):
                         challenge_id=challenge_id,
                         primary_service=primary_service
                     )
+                    
+                    current_app.logger.info(f"Multi-image stack created successfully: stack_id={stack_id}, containers={len(containers)}")
                     
                     # Create tracker entries for all containers in the stack
                     display_host = docker.domain if docker.domain else str(docker.hostname).split(':')[0]
@@ -2213,19 +2264,23 @@ class ContainerAPI(Resource):
                     
                     # Return connection info for the primary service
                     primary_container = next((c for c in containers if c['is_primary']), containers[0])
-                    return {
+                    response_data = {
+                        "success": True,
                         "result": f"Container stack created successfully with {len(containers)} containers",
                         "hostname": display_host,
                         "port": primary_container['ports'][0] if primary_container['ports'] else None,
                         "revert_time": unix_time(datetime.utcnow()) + instance_duration
                     }
+                    current_app.logger.info(f"Returning multi-container response: {response_data}")
+                    return response_data
                 except Exception as e:
                     current_app.logger.error(f"Error creating multi-container stack: {str(e)}")
                     import traceback
-                    traceback.print_exc()
+                    current_app.logger.error(f"Full traceback: {traceback.format_exc()}")
                     return {"success": False, "message": f"Failed to create container stack: {str(e)}"}, 500
 
             # Single image challenge - use original logic
+            current_app.logger.info("✓ Taking SINGLE-IMAGE path")
             if not is_multi_image:
                 # Get ports and create container
                 try:
@@ -2254,6 +2309,7 @@ class ContainerAPI(Resource):
                     db.session.add(entry)
                     db.session.commit()
                     return {
+                        "success": True,
                         "result": "Container created successfully",
                         "hostname": display_host,
                         "port": port_list[0] if port_list else None,
@@ -2374,7 +2430,8 @@ class DockerStatus(Resource):
                 'ports': i.ports.split(','),
                 'host': display_host,
                 'server_name': i.docker_config.name if i.docker_config else 'Unknown Server',
-                'challenge_name': i.challenge
+                'challenge_name': i.challenge,
+                'is_primary': i.is_primary if hasattr(i, 'is_primary') else False
             })
         
         # Remove expired containers from database
@@ -2478,9 +2535,8 @@ class DockerAPI(Resource):
                     'data': [{'name': 'Error: No images found on any server!'}]
                 }, 400
             
-
             for item in data:
-
+                pass  # Placeholder for any post-processing logic
             
             return {
                 'success': True,

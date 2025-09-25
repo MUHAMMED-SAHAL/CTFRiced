@@ -2585,7 +2585,7 @@ class DockerAPI(Resource):
                     # Add error entry for this server
                     data.append({
                         'name': f"⚠️ {server.name}",
-                        'options': [{'name': f'{server.name} - {error_msg}'}]
+                        'options': [{'name': f'{server.name} - {error_msg}'}],
                         'type': 'error',
                         'error': True
                     })

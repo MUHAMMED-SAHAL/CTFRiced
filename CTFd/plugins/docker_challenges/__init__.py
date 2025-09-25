@@ -92,6 +92,7 @@ class DockerConfig(db.Model):
 class DockerChallengeTracker(db.Model):
     """
 	Docker Container Tracker. This model stores the users/teams active docker containers.
+	Now supports multi-image challenges with stack tracking.
 	"""
     id = db.Column(db.Integer, primary_key=True)
     team_id = db.Column("team_id", db.String(64), index=True)
@@ -104,6 +105,12 @@ class DockerChallengeTracker(db.Model):
     host = db.Column('host', db.String(128), index=True)
     challenge = db.Column('challenge', db.String(256), index=True)
     docker_config_id = db.Column("docker_config_id", db.Integer, db.ForeignKey('docker_config.id'), index=True)  # Which server was used
+    
+    # New fields for multi-image support
+    stack_id = db.Column("stack_id", db.String(128), nullable=True, index=True)  # Group containers in same stack
+    service_name = db.Column("service_name", db.String(64), nullable=True)  # Service name within compose stack
+    is_primary = db.Column("is_primary", db.Boolean, default=False)  # Primary service flag for port display
+    network_name = db.Column("network_name", db.String(128), nullable=True)  # Docker network name
     
     # Relationship to get server info
     docker_config = db.relationship('DockerConfig', backref='active_containers')
@@ -195,8 +202,14 @@ def define_docker_admin(app):
                 except Exception:
                     server.repositories = None
                 
-                db.session.add(server)
-                db.session.commit()
+                try:
+                    db.session.add(server)
+                    db.session.commit()
+                except Exception as e:
+                    db.session.rollback()
+                    current_app.logger.error(f"Error saving server to database: {str(e)}")
+                    form.errors['general'] = [f"Error saving server: {str(e)}"]
+                    raise
                 
                 # Test the server connection
                 update_server_status(server)
@@ -213,7 +226,7 @@ def define_docker_admin(app):
             servers = DockerConfig.query.filter_by(is_active=True).all()
             for server in servers:
                 try:
-                    server_repos = get_repositories(server)
+                    server_repos = get_repositories(server, group_compose=True)
                     repos.extend(server_repos)
                 except Exception:
                     continue
@@ -277,7 +290,13 @@ def define_docker_admin(app):
                 except Exception:
                     server.repositories = None
                 
-                db.session.commit()
+                try:
+                    db.session.commit()
+                except Exception as e:
+                    db.session.rollback()
+                    current_app.logger.error(f"Error updating server in database: {str(e)}")
+                    form.errors['general'] = [f"Error updating server: {str(e)}"]
+                    raise
                 
                 # Test the server connection
                 update_server_status(server)
@@ -298,7 +317,7 @@ def define_docker_admin(app):
         
         # Get repositories for this server
         try:
-            repos = get_repositories(server)
+            repos = get_repositories(server, group_compose=True)
         except Exception:
             repos = []
         
@@ -330,10 +349,15 @@ def define_docker_admin(app):
             if active_containers > 0:
                 return jsonify({"success": False, "message": f"Cannot delete server with {active_containers} active containers"}), 400
             
-            db.session.delete(server)
-            db.session.commit()
+            try:
+                db.session.delete(server)
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Error deleting server from database: {str(e)}")
+                raise
             
-            return jsonify({"success": True, "message": "Server deleted successfully"})
+            return jsonify({"success": True, "message": "Server deleted successfully"}), 200
         except Exception as e:
             return jsonify({"success": False, "message": f"Error deleting server: {str(e)}"}), 500
 
@@ -350,7 +374,7 @@ def define_docker_admin(app):
                 "success": is_healthy,
                 "message": message,
                 "status": server.status
-            })
+            }), 200
         except Exception as e:
             return jsonify({"success": False, "message": f"Error testing server: {str(e)}"}), 500
 
@@ -373,7 +397,65 @@ def define_docker_status(app):
                 update_server_status(server)
         
         # Get all active containers with server information
-        docker_tracker = DockerChallengeTracker.query.all()
+        all_containers = DockerChallengeTracker.query.all()
+        
+        # Group containers by stack_id (for multi-image) and single containers
+        stacks = {}
+        single_containers = []
+        
+        for container in all_containers:
+            if container.stack_id:
+                # Multi-image stack - group by stack_id
+                if container.stack_id not in stacks:
+                    stacks[container.stack_id] = {
+                        'containers': [],
+                        'primary': None,
+                        'stack_id': container.stack_id
+                    }
+                stacks[container.stack_id]['containers'].append(container)
+                if container.is_primary:
+                    stacks[container.stack_id]['primary'] = container
+            else:
+                # Single container
+                single_containers.append(container)
+        
+        # Create display list with one entry per stack/container
+        docker_tracker = []
+        
+        # Add stack entries (show primary container info, but list all images)
+        for stack_id, stack_info in stacks.items():
+            primary_container = stack_info['primary'] or stack_info['containers'][0]
+            
+            # Create a combined entry representing the whole stack
+            # Use the primary container as base, but create a simple object to avoid DB issues
+            stack_entry = type('StackEntry', (), {})()
+            stack_entry.id = primary_container.id
+            stack_entry.team_id = primary_container.team_id
+            stack_entry.user_id = primary_container.user_id
+            stack_entry.timestamp = primary_container.timestamp
+            stack_entry.revert_time = primary_container.revert_time
+            stack_entry.instance_id = primary_container.instance_id
+            stack_entry.ports = primary_container.ports
+            stack_entry.host = primary_container.host
+            stack_entry.challenge = primary_container.challenge  # Keep the actual challenge name
+            stack_entry.docker_config_id = primary_container.docker_config_id
+            stack_entry.docker_config = primary_container.docker_config
+            stack_entry.stack_id = primary_container.stack_id
+            stack_entry.service_name = primary_container.service_name
+            stack_entry.network_name = primary_container.network_name
+            
+            # Customize display fields for multi-image stacks
+            stack_entry.docker_image = f"{len(stack_info['containers'])} images: " + ", ".join([c.docker_image for c in stack_info['containers']])
+            stack_entry.is_stack = True
+            stack_entry.container_count = len(stack_info['containers'])
+            
+            docker_tracker.append(stack_entry)
+        
+        # Add single container entries
+        for container in single_containers:
+            container.is_stack = False
+            container.container_count = 1
+            docker_tracker.append(container)
         
         # Enhance tracker data with user/team names and server info
         for i in docker_tracker:
@@ -450,7 +532,7 @@ class KillContainerAPI(Resource):
             else:
                 return {"success": False, "message": "Invalid container specified"}, 400
                 
-            return {"success": True, "message": "Container(s) deleted successfully"}
+            return {"success": True, "message": "Container(s) deleted successfully"}, 200
             
         except Exception as e:
             current_app.logger.error(f"Error in nuke endpoint: {str(e)}")
@@ -570,7 +652,7 @@ def get_best_server_for_image(image_name):
         return None
 
 
-def do_request(docker, url, headers=None, method='GET', timeout=30):
+def do_request(docker, url, headers=None, method='GET', timeout=30, data=None):
     tls = docker.tls_enabled
     prefix = 'https' if tls else 'http'
     host = docker.hostname
@@ -584,7 +666,7 @@ def do_request(docker, url, headers=None, method='GET', timeout=30):
             elif method == 'DELETE':
                 r = requests.delete(url=f"%s{url}" % URL_TEMPLATE, cert=cert, verify=verify, headers=headers, timeout=timeout)
             elif method == 'POST':
-                r = requests.post(url=f"%s{url}" % URL_TEMPLATE, cert=cert, verify=verify, headers=headers, timeout=timeout)
+                r = requests.post(url=f"%s{url}" % URL_TEMPLATE, cert=cert, verify=verify, headers=headers, timeout=timeout, data=data)
             # Clean up the cert files:
             for file_path in [*cert, verify]:
                 if file_path:
@@ -595,16 +677,16 @@ def do_request(docker, url, headers=None, method='GET', timeout=30):
             elif method == 'DELETE':
                 r = requests.delete(url=f"%s{url}" % URL_TEMPLATE, headers=headers, timeout=timeout)
             elif method == 'POST':
-                r = requests.post(url=f"%s{url}" % URL_TEMPLATE, headers=headers, timeout=timeout)
+                r = requests.post(url=f"%s{url}" % URL_TEMPLATE, headers=headers, timeout=timeout, data=data)
         return r
     except requests.exceptions.Timeout:
         current_app.logger.warning(f"Timeout making request to {URL_TEMPLATE}{url}")
         return None
     except requests.exceptions.ConnectionError:
-        print(f"Connection error making request to {URL_TEMPLATE}{url}")
+        current_app.logger.error(f"Connection error making request to {URL_TEMPLATE}{url}")
         return None
     except Exception as e:
-        print(f"Error making request to {URL_TEMPLATE}{url}: {str(e)}")
+        current_app.logger.error(f"Error making request to {URL_TEMPLATE}{url}: {str(e)}")
         return None
 
 
@@ -635,39 +717,169 @@ def get_client_cert(docker):
 
 
 # For the Docker Config Page. Gets the Current Repositories available on the Docker Server.
-def get_repositories(docker, tags=False, repos=False):
+def get_repositories(docker, tags=False, repos=False, group_compose=False, challenge_id=None):
+    """
+    Get images from Docker server, optionally group compose-related images
+    
+    Args:
+        docker: DockerConfig instance
+        tags: Include tags in image names
+        repos: Filter by allowed repositories list
+        group_compose: Group compose-related images together
+        challenge_id: Optional challenge ID to filter images by challenge context
+    
+    Returns:
+        List of images or grouped compose projects
+    """
     try:
         r = do_request(docker, '/images/json?all=1')
         if r is None:
-            print("ERROR: do_request returned None for /images/json")
+            current_app.logger.error("Docker API request returned None for /images/json")
             return []
         
         if not hasattr(r, 'status_code') or r.status_code != 200:
-            print(f"ERROR: Docker API returned status {r.status_code if hasattr(r, 'status_code') else 'unknown'}")
+            current_app.logger.error(f"Docker API returned status {r.status_code if hasattr(r, 'status_code') else 'unknown'}")
             return []
         
         result = list()
+        compose_groups = {}  # Group related images by project name and challenge
+        
         try:
             images = r.json()
+            
+            # First pass: collect all images with their metadata
+            image_metadata = {}
             for i in images:
-                if not i['RepoTags'] == []:
-                    if not i['RepoTags'][0].split(':')[0] == '<none>':
-                        image_name = i['RepoTags'][0].split(':')[0]
-                        if repos:
-                            # repos is a list of allowed repository names
-                            if image_name not in repos:
-                                continue
-                        if not tags:
-                            result.append(image_name)
+                if not i['RepoTags'] or i['RepoTags'] == [] or i['RepoTags'][0].split(':')[0] == '<none>':
+                    continue
+                
+                image_name = i['RepoTags'][0].split(':')[0] if not tags else i['RepoTags'][0]
+                
+                # Filter by allowed repositories if specified
+                if repos:
+                    base_name = image_name.split(':')[0]
+                    if base_name not in repos:
+                        continue
+                
+                # Get image labels for challenge identification
+                image_labels = i.get('Labels', {}) or {}
+                image_challenge_id = image_labels.get('ctf.challenge_id')
+                image_stack_id = image_labels.get('ctf.stack_id')
+                
+                image_metadata[image_name] = {
+                    'labels': image_labels,
+                    'challenge_id': image_challenge_id,
+                    'stack_id': image_stack_id,
+                    'raw_data': i
+                }
+                
+
+            
+            # Second pass: group images intelligently
+            for image_name, metadata in image_metadata.items():
+                image_challenge_id = metadata['challenge_id']
+                
+                # If we're filtering by challenge and this image doesn't match, skip it
+                if challenge_id and image_challenge_id and str(image_challenge_id) != str(challenge_id):
+
+                    continue
+                
+                # Group compose images if requested (handle both underscores and hyphens)
+                if group_compose and ('_' in image_name or '-' in image_name):
+                    # Extract compose project name (everything before last separator)
+                    base_name = image_name.split(':')[0] if tags else image_name
+                    
+                    # Try underscore first, then hyphen
+                    if '_' in base_name:
+                        parts = base_name.split('_')
+                        separator = '_'
+                    elif '-' in base_name:
+                        parts = base_name.split('-')
+                        separator = '-'
+                    else:
+                        parts = [base_name]
+                        separator = ''
+                    
+                    if len(parts) >= 2:
+                        project_name = separator.join(parts[:-1])  # e.g., "h7tex" from "h7tex-backend"
+                        service_name = parts[-1]                   # e.g., "backend" from "h7tex-backend"
+                        
+                        # Create challenge-aware group key to prevent collisions
+                        if image_challenge_id:
+                            # Use challenge ID in group key for labeled images
+                            group_key = f"{project_name}_chal_{image_challenge_id}"
+                            display_name = project_name
                         else:
-                            result.append(i['RepoTags'][0])
+                            # For unlabeled images, use project name but mark as unlabeled
+                            group_key = f"{project_name}_unlabeled"
+                            display_name = f"{project_name} (unlabeled)"
+                        
+
+                        
+                        if group_key not in compose_groups:
+                            compose_groups[group_key] = {
+                                'images': [],
+                                'services': [],
+                                'project_name': project_name,
+                                'display_name': display_name,
+                                'challenge_id': image_challenge_id,
+                                'is_labeled': bool(image_challenge_id)
+                            }
+                        
+                        compose_groups[group_key]['images'].append(image_name)
+                        compose_groups[group_key]['services'].append(service_name)
+                    else:
+                        result.append(image_name)  # Single image
+                else:
+                    result.append(image_name)  # Single image
+                    
         except Exception as e:
-            print(f"ERROR: Failed to parse Docker images response: {str(e)}")
+            current_app.logger.error(f"Failed to parse Docker images response: {str(e)}")
             return []
         
+        # Add compose groups as multi-image options
+        final_result = []
+        if group_compose:
+            # Add individual images that aren't part of compose groups
+            for item in result:
+                if isinstance(item, str):  # Regular image
+                    final_result.append(item)
+            
+            # Apply cross-challenge contamination prevention
+            compose_groups = prevent_cross_challenge_contamination(compose_groups, challenge_id)
+            
+            # Add compose groups (with collision prevention)
+            for group_key, data in compose_groups.items():
+                if len(data['images']) > 1:  # Only groups with multiple images
+                    project_name = data['project_name']
+                    challenge_info = f" (Challenge {data['challenge_id']})" if data['challenge_id'] else ""
+                    label_info = "" if data['is_labeled'] else " [Unlabeled]"
+                    
+
+                    
+                    final_result.append({
+                        'type': 'compose_group',
+                        'name': project_name,
+                        'group_key': group_key,  # Internal key for uniqueness
+                        'images': data['images'],
+                        'services': data['services'],
+                        'display_name': f"{project_name} ({len(data['images'])} images){label_info}{challenge_info}",
+                        'image_count': len(data['images']),
+                        'challenge_id': data['challenge_id'],
+                        'is_labeled': data['is_labeled']
+                    })
+                else:
+                    # Single image in project - add to regular results
+                    if data['images']:
+                        result.extend(data['images'])
+
+            return final_result
+        
         return list(set(result))
+        
     except Exception as e:
-        print(f"ERROR in get_repositories(): {str(e)}")
+        current_app.logger.error(f"Error in get_repositories(): {str(e)}")
+        return []
         import traceback
         traceback.print_exc()
         return []
@@ -677,11 +889,11 @@ def get_unavailable_ports(docker):
     try:
         r = do_request(docker, '/containers/json?all=1')
         if r is None:
-            print("ERROR: do_request returned None for /containers/json")
+            current_app.logger.error("Docker API request returned None for /containers/json")
             return []
         
         if not hasattr(r, 'status_code') or r.status_code != 200:
-            print(f"ERROR: Docker API returned status {r.status_code if hasattr(r, 'status_code') else 'unknown'}")
+            current_app.logger.error(f"Docker API returned status {r.status_code if hasattr(r, 'status_code') else 'unknown'}")
             return []
         
         result = list()
@@ -693,12 +905,12 @@ def get_unavailable_ports(docker):
                         if 'PublicPort' in p:
                             result.append(p['PublicPort'])
         except Exception as e:
-            print(f"ERROR: Failed to parse Docker containers response: {str(e)}")
+            current_app.logger.error(f"Failed to parse Docker containers response: {str(e)}")
             return []
         
         return result
     except Exception as e:
-        print(f"ERROR in get_unavailable_ports(): {str(e)}")
+        current_app.logger.error(f"Error in get_unavailable_ports(): {str(e)}")
         import traceback
         traceback.print_exc()
         return []
@@ -706,34 +918,44 @@ def get_unavailable_ports(docker):
 
 def get_required_ports(docker, image):
     try:
+
+        
+        # Validate image name format
+        if not image or '|' in image:
+            raise Exception(f"Invalid image name format: '{image}' - may contain display formatting")
+        
         r = do_request(docker, f'/images/{image}/json?all=1')
         if r is None:
-            print(f"ERROR: do_request returned None for /images/{image}/json")
+            current_app.logger.error(f"Docker API request returned None for /images/{image}/json")
             return []
         
         if not hasattr(r, 'status_code') or r.status_code != 200:
-            print(f"ERROR: Docker API returned status {r.status_code if hasattr(r, 'status_code') else 'unknown'}")
+            error_msg = f"Docker API returned status {r.status_code if hasattr(r, 'status_code') else 'unknown'}"
+            if hasattr(r, 'text'):
+                error_msg += f": {r.text}"
+            current_app.logger.error(error_msg)
             return []
         
         try:
             image_info = r.json()
             if 'Config' in image_info and 'ExposedPorts' in image_info['Config'] and image_info['Config']['ExposedPorts']:
-                result = image_info['Config']['ExposedPorts'].keys()
+                result = list(image_info['Config']['ExposedPorts'].keys())
+
                 return result
             else:
-                print(f"WARNING: No exposed ports found for image {image}")
+                current_app.logger.warning(f"No exposed ports found for image {image}")
                 return []
         except Exception as e:
-            print(f"ERROR: Failed to parse image info response: {str(e)}")
+            current_app.logger.error(f"Failed to parse image info response: {str(e)}")
             return []
     except Exception as e:
-        print(f"ERROR in get_required_ports(): {str(e)}")
+        current_app.logger.error(f"Error in get_required_ports() for image '{image}': {str(e)}")
         import traceback
         traceback.print_exc()
         return []
 
 
-def create_container(docker, image, team, portbl):
+def create_container(docker, image, team, portbl, challenge_id=None):
     try:
         tls = docker.tls_enabled
         CERT = None
@@ -747,13 +969,26 @@ def create_container(docker, image, team, portbl):
         try:
             needed_ports = get_required_ports(docker, image)
         except Exception as e:
-            print(f"ERROR: Failed to get required ports: {str(e)}")
+            current_app.logger.error(f"Failed to get required ports: {str(e)}")
             raise Exception(f"Failed to get required ports for image {image}")
         
         team = hashlib.md5(team.encode("utf-8")).hexdigest()[:10]
-        # Sanitize image name to prevent injection
-        image_safe = image.replace('/', '_').replace(':', '_')
+        
+        # Sanitize image name for Docker container naming compliance
+        # Docker container names must be lowercase alphanumeric with some special chars
+        import re
+        image_safe = re.sub(r'[^a-zA-Z0-9_.-]', '_', image.lower())
+        # Remove any leading/trailing underscores or dots
+        image_safe = image_safe.strip('_.-')
+        # Ensure it doesn't start with a dot or dash
+        if image_safe.startswith('.') or image_safe.startswith('-'):
+            image_safe = 'img_' + image_safe[1:]
+        # Ensure it's not empty
+        if not image_safe:
+            image_safe = 'container'
+            
         container_name = "%s_%s" % (image_safe, team)
+
         
         # Check if container with this name already exists and remove it
         try:
@@ -775,44 +1010,60 @@ def create_container(docker, image, team, portbl):
                                     DockerChallengeTracker.query.filter_by(instance_id=container['Id']).delete()
                                     db.session.commit()
                                 except Exception as db_e:
-                                    print(f"Warning: Error removing from database: {str(db_e)}")
+                                    current_app.logger.warning(f"Error removing from database: {str(db_e)}")
                                 
                             except Exception as rm_e:
-                                print(f"Warning: Error removing existing container: {str(rm_e)}")
+                                current_app.logger.warning(f"Error removing existing container: {str(rm_e)}")
                                 # Continue anyway, the create might still work
                             break
         except Exception as e:
-            print(f"Warning: Error checking for existing containers: {str(e)}")
+            current_app.logger.warning(f"Error checking for existing containers: {str(e)}")
             # Continue anyway
         
         assigned_ports = dict()
         for i in needed_ports:
-            attempts = 0
-            while attempts < 100:  # Prevent infinite loop
-                assigned_port = random.choice(range(30000, 60000))
-                if assigned_port not in portbl:
-                    assigned_ports['%s/tcp' % assigned_port] = {}
-                    break
-                attempts += 1
-            if attempts >= 100:
-                raise Exception("Could not find available port after 100 attempts")
+            # Use the same port allocation method as compose stacks
+            assigned_port = get_available_port(docker)
+            assigned_ports['%s/tcp' % assigned_port] = {}
         
         ports = dict()
         bindings = dict()
         tmp_ports = list(assigned_ports.keys())
         for i in needed_ports:
             ports[i] = {}
-            bindings[i] = [{"HostPort": tmp_ports.pop()}]
+            host_port_key = tmp_ports.pop()
+            # Extract just the port number from the format "30000/tcp"
+            host_port = host_port_key.split('/')[0]
+            bindings[i] = [{"HostPort": host_port}]
+        
+        # Prepare container labels for challenge identification
+        labels = {
+            "ctf.managed": "true",
+            "ctf.team": team,
+            "ctf.image": image,
+            "ctf.created_at": str(int(time.time()))
+        }
+        
+        # Add challenge-specific labels if provided
+        if challenge_id:
+            labels["ctf.challenge_id"] = str(challenge_id)
+            labels["ctf.type"] = "single"
         
         headers = {'Content-Type': "application/json"}
-        data = json.dumps({"Image": image, "ExposedPorts": ports, "HostConfig": {"PortBindings": bindings}})
+        container_config = {
+            "Image": image, 
+            "ExposedPorts": ports, 
+            "HostConfig": {"PortBindings": bindings},
+            "Labels": labels
+        }
+        data = json.dumps(container_config)
         
         if tls:
             cert, verify = get_client_cert(docker)
             r = requests.post(url="%s/containers/create?name=%s" % (URL_TEMPLATE, container_name), cert=cert,
                           verify=verify, data=data, headers=headers)
             if r.status_code not in [200, 201]:
-                print(f"ERROR: Container creation failed with status {r.status_code}: {r.text}")
+                current_app.logger.error(f"Container creation failed with status {r.status_code}: {r.text}")
                 raise Exception(f"Container creation failed: {r.text}")
                 
             result = r.json()
@@ -820,7 +1071,7 @@ def create_container(docker, image, team, portbl):
             s = requests.post(url="%s/containers/%s/start" % (URL_TEMPLATE, result['Id']), cert=cert, verify=verify,
                               headers=headers)
             if s.status_code not in [200, 204]:
-                print(f"ERROR: Container start failed with status {s.status_code}: {s.text}")
+                current_app.logger.error(f"Container start failed with status {s.status_code}: {s.text}")
                 raise Exception(f"Container start failed: {s.text}")
                 
             # Clean up the cert files:
@@ -832,7 +1083,7 @@ def create_container(docker, image, team, portbl):
                               data=data, headers=headers)
             
             if r.status_code not in [200, 201]:
-                print(f"ERROR: Container creation failed with status {r.status_code}: {r.text}")
+                current_app.logger.error(f"Container creation failed with status {r.status_code}: {r.text}")
                 raise Exception(f"Container creation failed: {r.text}")
                 
             result = r.json()
@@ -840,12 +1091,12 @@ def create_container(docker, image, team, portbl):
             # name conflicts are not handled properly
             s = requests.post(url="%s/containers/%s/start" % (URL_TEMPLATE, result['Id']), headers=headers)
             if s.status_code not in [200, 204]:
-                print(f"ERROR: Container start failed with status {s.status_code}: {s.text}")
+                current_app.logger.error(f"Container start failed with status {s.status_code}: {s.text}")
                 raise Exception(f"Container start failed: {s.text}")
         
         return result, data, docker  # Return the docker config used
     except Exception as e:
-        print(f"ERROR in create_container(): {str(e)}")
+        current_app.logger.error(f"Error in create_container(): {str(e)}")
         import traceback
         traceback.print_exc()
         raise
@@ -863,16 +1114,461 @@ def delete_container(docker, instance_id):
         response = do_request(docker, f'/containers/{instance_id}?force=true', headers=headers, method='DELETE')
         
         if response is None:
-            print(f"Warning: Failed to connect to Docker API for container {instance_id}")
+            current_app.logger.warning(f"Failed to connect to Docker API for container {instance_id}")
             return False
             
         if hasattr(response, 'status_code') and response.status_code not in [200, 204, 404]:
-            print(f"Warning: Container deletion returned status code {response.status_code}")
+            current_app.logger.warning(f"Container deletion returned status code {response.status_code}")
             return False
             
         return True
     except Exception as e:
-        print(f"Error deleting container {instance_id}: {str(e)}")
+        current_app.logger.error(f"Error deleting container {instance_id}: {str(e)}")
+        return False
+
+
+def get_available_port(docker, start_port=30000, end_port=60000):
+    """
+    Get an available port on the Docker host
+    """
+    try:
+        # Get list of used ports
+        used_ports = get_unavailable_ports(docker)
+
+        
+        # Convert used_ports to integers for consistent comparison
+        used_ports_int = set()
+        for port in used_ports:
+            try:
+                used_ports_int.add(int(port))
+            except (ValueError, TypeError):
+                pass
+        
+        # Find available port in range
+        import random
+        available_ports = []
+        for port in range(start_port, end_port):
+            if port not in used_ports_int:
+                available_ports.append(port)
+        
+        if available_ports:
+            # Return a random port from available ones instead of always the first
+            selected_port = random.choice(available_ports)
+
+            return selected_port
+        
+        # Fallback to random port if no port found in range
+        fallback_port = random.choice(range(start_port, end_port))
+
+        return fallback_port
+    except Exception as e:
+        current_app.logger.error(f"Error getting available port: {str(e)}")
+        import random
+        fallback_port = random.choice(range(30000, 60000))
+
+        return fallback_port
+
+
+def prevent_cross_challenge_contamination(compose_groups, challenge_id):
+    """
+    Prevent images from different challenges being grouped together
+    by applying stricter filtering for unlabeled images
+    
+    Args:
+        compose_groups: Dictionary of compose groups
+        challenge_id: Current challenge ID (if any)
+    
+    Returns:
+        Filtered compose groups dictionary
+    """
+    if not challenge_id:
+        return compose_groups
+    
+    filtered_groups = {}
+    
+    for group_key, data in compose_groups.items():
+        group_challenge_id = data.get('challenge_id')
+        
+        # If image has a challenge label and it doesn't match current challenge, skip it
+        if group_challenge_id and str(group_challenge_id) != str(challenge_id):
+
+            continue
+        
+        # For unlabeled images, use additional heuristics
+        if not group_challenge_id:
+            # Apply stricter naming rules to prevent contamination
+            project_name = data.get('project_name', '')
+            
+            # If project name contains 'chal', 'challenge', or numbers that might indicate different challenges
+            # be more conservative about grouping
+            if any(keyword in project_name.lower() for keyword in ['chal', 'challenge', 'ctf']):
+                # Only include if it's a very clear match (you could add more logic here)
+
+            
+            # Add warning to display name for unlabeled images
+            if 'display_name' in data:
+                data['display_name'] = data['display_name'].replace('(unlabeled)', '(unlabeled - use caution)')
+        
+        filtered_groups[group_key] = data
+    
+    return filtered_groups
+
+
+def parse_image_name_from_display(display_name):
+    """
+    Parse the actual Docker image name from the display format used in the frontend
+    
+    Args:
+        display_name: The display name format like "Server Name | image-name" or just "image-name"
+        
+    Returns:
+        str: The actual Docker image name
+    """
+    try:
+        if ' | ' in display_name:
+            # Format: "Server Name | Image Name" - extract the image name
+            parts = display_name.split(' | ')
+            if len(parts) >= 2:
+                image_name = parts[1].strip()
+                
+                # Handle multi-image format: "[MULTI] Group Name"
+                if image_name.startswith('[MULTI] '):
+                    # This shouldn't happen for single image calls, but handle it
+                    return image_name.replace('[MULTI] ', '').strip()
+                
+                return image_name
+        
+        # If no pipe separator, assume it's already just the image name
+        return display_name.strip()
+    except Exception as e:
+        current_app.logger.error(f"Error parsing image name from '{display_name}': {str(e)}")
+        return display_name  # Return original if parsing fails
+
+
+def get_instance_duration(challenge_id):
+    """
+    Get the instance duration for a challenge in seconds
+    
+    Args:
+        challenge_id: Challenge ID
+        
+    Returns:
+        int: Duration in seconds (default 900 = 15 minutes)
+    """
+    try:
+        challenge = DockerChallenge.query.filter_by(id=challenge_id).first()
+        if challenge and challenge.instance_duration:
+            return challenge.instance_duration * 60  # Convert minutes to seconds
+        return 900  # Default 15 minutes
+    except:
+        return 900  # Default 15 minutes
+
+
+def create_compose_stack(docker, images, team, challenge_id, primary_service=None):
+    """
+    Create multiple containers for compose-based challenge
+    
+    Args:
+        docker: DockerConfig instance
+        images: List of Docker images to deploy
+        team: Team identifier
+        challenge_id: Challenge ID
+        primary_service: Service name that should be marked as primary
+    
+    Returns:
+        tuple: (stack_id, containers_info, primary_port, network_name)
+    """
+    try:
+        team_hash = hashlib.md5(team.encode("utf-8")).hexdigest()[:10]
+        timestamp_suffix = int(time.time())
+        stack_id = f"challenge_{challenge_id}_{team_hash}"
+        
+        # Create shared network for this stack with timestamp to ensure uniqueness
+        network_name = f"ctf_{stack_id}_{timestamp_suffix}"
+        network_config = {
+            "Name": network_name,
+            "Driver": "bridge",
+            "Internal": False,
+            "Labels": {
+                "ctf.stack_id": stack_id,
+                "ctf.challenge_id": str(challenge_id),
+                "ctf.team": team
+            }
+        }
+        
+        # Create network with retry logic
+        headers = {'Content-Type': 'application/json'}
+        network_response = None
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                network_response = do_request(docker, '/networks/create', 
+                                            method='POST', 
+                                            headers=headers,
+                                            data=json.dumps(network_config),
+                                            timeout=60)  # Increase timeout for network creation
+                
+                if network_response and network_response.status_code == 201:
+                    break
+                elif network_response and network_response.status_code == 409:
+                    # Network already exists, try to remove it first
+                    try:
+                        current_app.logger.info(f"Network {network_name} already exists, attempting cleanup...")
+                        delete_response = do_request(docker, f'/networks/{network_name}', method='DELETE', timeout=30)
+                        if delete_response:
+                            current_app.logger.info(f"Cleanup response: {delete_response.status_code}")
+                        time.sleep(3)  # Wait longer for Docker to clean up
+                        continue
+                    except Exception as cleanup_error:
+                        current_app.logger.warning(f"Network cleanup error: {str(cleanup_error)}")
+                        pass
+                elif attempt < max_retries - 1:
+                    current_app.logger.info(f"Network creation attempt {attempt + 1} failed, retrying...")
+                    time.sleep(2)  # Wait before retry
+                    continue
+                else:
+                    break
+            except Exception as e:
+                current_app.logger.error(f"Network creation attempt {attempt + 1} error: {str(e)}")
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+                    continue
+                else:
+                    break
+        
+        if not network_response:
+            raise Exception(f"Failed to create network '{network_name}': No response from Docker API after {max_retries} attempts. Check Docker connectivity.")
+        elif network_response.status_code != 201:
+            error_detail = ""
+            try:
+                if network_response.text:
+                    error_detail = f" - {network_response.text}"
+            except:
+                pass
+            raise Exception(f"Failed to create network '{network_name}': HTTP {network_response.status_code}{error_detail}")
+        
+        containers = []
+        primary_port = None
+        created_containers = []  # Track for cleanup on failure
+        
+        # Create each container
+        for i, image in enumerate(images):
+            # Extract service name from image (after last underscore)
+            if '_' in image:
+                service_name = image.split('_')[-1].split(':')[0]  # Remove tag if present
+            else:
+                service_name = image.split(':')[0]  # Use image name if no underscore
+            
+            container_name = f"{stack_id}_{service_name}"
+            
+            # Get ports for this image
+            try:
+                needed_ports = get_required_ports(docker, image)
+            except Exception as e:
+                current_app.logger.warning(f"Failed to get ports for {image}: {str(e)}")
+                needed_ports = []  # Continue without ports if detection fails
+            
+            # Configure port bindings
+            port_bindings = {}
+            exposed_ports = {}
+            container_ports = []
+            
+            for port in needed_ports:
+                assigned_port = get_available_port(docker)
+                port_bindings[f"{port}/tcp"] = [{"HostPort": str(assigned_port)}]
+                exposed_ports[f"{port}/tcp"] = {}
+                container_ports.append(assigned_port)
+                
+                # Mark primary service port
+                if (service_name == primary_service or not primary_port) and needed_ports:
+                    primary_port = assigned_port
+            
+            # Container configuration
+            container_config = {
+                "Image": image,
+                "name": container_name,
+                "ExposedPorts": exposed_ports,
+                "NetworkingConfig": {
+                    "EndpointsConfig": {
+                        network_name: {
+                            "Aliases": [service_name]  # Allow inter-container communication by service name
+                        }
+                    }
+                },
+                "HostConfig": {
+                    "PortBindings": port_bindings,
+                    "RestartPolicy": {"Name": "unless-stopped"},
+                    "NetworkMode": network_name
+                },
+                "Labels": {
+                    "ctf.managed": "true",
+                    "ctf.type": "compose",
+                    "ctf.stack_id": stack_id,
+                    "ctf.challenge_id": str(challenge_id),
+                    "ctf.team": team,
+                    "ctf.service": service_name,
+                    "ctf.image": image,
+                    "ctf.is_primary": str(service_name == primary_service).lower(),
+                    "ctf.created_at": str(int(time.time())),
+                    "ctf.project_name": stack_id.split('_')[1] if '_' in stack_id else stack_id  # Extract challenge part
+                }
+            }
+            
+            # Create container
+            create_response = do_request(docker, '/containers/create', 
+                                       method='POST',
+                                       headers=headers,
+                                       data=json.dumps(container_config))
+            
+            if not create_response or create_response.status_code != 201:
+                raise Exception(f"Failed to create container {container_name}: {create_response.status_code if create_response else 'No response'}")
+            
+            container_id = create_response.json()['Id']
+            created_containers.append(container_id)
+            
+            # Start container
+            start_response = do_request(docker, f'/containers/{container_id}/start', method='POST')
+            if not start_response or start_response.status_code != 204:
+                raise Exception(f"Failed to start container {container_name}: {start_response.status_code if start_response else 'No response'}")
+            
+            containers.append({
+                'id': container_id,
+                'name': container_name,
+                'image': image,
+                'service': service_name,
+                'ports': container_ports,
+                'is_primary': service_name == primary_service
+            })
+        
+        current_app.logger.info(f"Successfully created compose stack {stack_id} with {len(containers)} containers")
+        return stack_id, containers, primary_port, network_name
+        
+    except Exception as e:
+        current_app.logger.error(f"Error creating compose stack: {str(e)}")
+        # Cleanup on failure
+        cleanup_failed_stack(docker, network_name if 'network_name' in locals() else None, 
+                           created_containers if 'created_containers' in locals() else [])
+        raise e
+
+
+def migrate_existing_containers_labels(docker):
+    """
+    Migration helper to add challenge labels to existing containers
+    This can be called manually by admins if needed
+    """
+    try:
+        # Get all containers
+        r = do_request(docker, '/containers/json?all=1')
+        if not r or r.status_code != 200:
+            return False
+        
+        containers = r.json()
+        updated_count = 0
+        
+        for container in containers:
+            container_id = container['Id']
+            container_name = container.get('Names', [''])[0].lstrip('/')
+            
+            # Skip if already has CTF labels
+            labels = container.get('Labels') or {}
+            if 'ctf.managed' in labels:
+                continue
+            
+            # Try to match with existing tracker entries
+            tracker_entries = DockerChallengeTracker.query.filter_by(instance_id=container_id).all()
+            if tracker_entries:
+                for tracker in tracker_entries:
+                    # Could add labels here via Docker API if needed
+                    # This is complex and would require container recreation
+
+                    updated_count += 1
+        
+
+        return True
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in migrate_existing_containers_labels: {str(e)}")
+        return False
+
+
+def cleanup_failed_stack(docker, network_name, container_ids):
+    """
+    Cleanup resources after failed stack creation
+    """
+    try:
+        # Stop and remove containers
+        for container_id in container_ids:
+            try:
+                do_request(docker, f'/containers/{container_id}/stop', method='POST')
+                do_request(docker, f'/containers/{container_id}?force=true', method='DELETE')
+            except Exception as e:
+                current_app.logger.warning(f"Failed to cleanup container {container_id}: {str(e)}")
+        
+        # Remove network
+        if network_name:
+            try:
+                do_request(docker, f'/networks/{network_name}', method='DELETE')
+            except Exception as e:
+                current_app.logger.warning(f"Failed to cleanup network {network_name}: {str(e)}")
+    except Exception as e:
+        current_app.logger.error(f"Error during stack cleanup: {str(e)}")
+
+
+def delete_compose_stack(docker, stack_id):
+    """
+    Delete entire compose stack (all containers and network)
+    
+    Args:
+        docker: DockerConfig instance
+        stack_id: Stack identifier
+    
+    Returns:
+        bool: Success status  
+    """
+    try:
+        # Get all containers in this stack
+        trackers = DockerChallengeTracker.query.filter_by(stack_id=stack_id).all()
+        
+        container_ids = []
+        network_name = None
+        
+        for tracker in trackers:
+            if tracker.instance_id:
+                container_ids.append(tracker.instance_id)
+            if tracker.network_name and not network_name:
+                network_name = tracker.network_name
+        
+        # Stop and remove all containers
+        for container_id in container_ids:
+            try:
+                # Stop container
+                stop_response = do_request(docker, f'/containers/{container_id}/stop', method='POST')
+                
+                # Remove container
+                remove_response = do_request(docker, f'/containers/{container_id}?force=true', method='DELETE')
+                
+                current_app.logger.info(f"Removed container {container_id} from stack {stack_id}")
+            except Exception as e:
+                current_app.logger.warning(f"Failed to remove container {container_id}: {str(e)}")
+        
+        # Remove network
+        if network_name:
+            try:
+                network_response = do_request(docker, f'/networks/{network_name}', method='DELETE')
+                current_app.logger.info(f"Removed network {network_name} for stack {stack_id}")
+            except Exception as e:
+                current_app.logger.warning(f"Failed to remove network {network_name}: {str(e)}")
+        
+        # Remove from database
+        DockerChallengeTracker.query.filter_by(stack_id=stack_id).delete()
+        db.session.commit()
+        
+        current_app.logger.info(f"Successfully deleted compose stack {stack_id}")
+        return True
+        
+    except Exception as e:
+        current_app.logger.error(f"Error deleting compose stack {stack_id}: {str(e)}")
         return False
 
 
@@ -885,9 +1581,9 @@ class DockerChallengeType(BaseChallenge):
         'view': '/plugins/docker_challenges/assets/view.html',
     }
     scripts = {
-        'create': '/plugins/docker_challenges/assets/create.js',
+        'create': '/plugins/docker_challenges/assets/create.js?v=20250924183200',
         'update': '/plugins/docker_challenges/assets/update.js',
-        'view': '/plugins/docker_challenges/assets/view.js?v=20250715185300',
+        'view': '/plugins/docker_challenges/assets/view.js?v=20250925030000',
     }
     route = '/plugins/docker_challenges/assets'
     blueprint = Blueprint('docker_challenges', __name__, template_folder='templates', static_folder='assets')
@@ -935,6 +1631,7 @@ class DockerChallengeType(BaseChallenge):
     def read(challenge):
         """
 		This method is in used to access the data of a challenge in a format processable by the front end.
+		Now includes enhanced fields for multi-image and web/tcp support.
 
 		:param challenge:
 		:return: Challenge object, data dictionary to be returned to the user
@@ -954,6 +1651,15 @@ class DockerChallengeType(BaseChallenge):
             'type': challenge.type,
             # CTFd 3.8.0 compatibility - include logic field if it exists
             'logic': getattr(challenge, 'logic', 'any'),
+            
+            # New enhanced fields
+            'challenge_type': getattr(challenge, 'challenge_type', 'single'),
+            'docker_images': getattr(challenge, 'docker_images', None),
+            'primary_service': getattr(challenge, 'primary_service', None),
+            'connection_type': getattr(challenge, 'connection_type', 'tcp'),
+            'instance_duration': getattr(challenge, 'instance_duration', 15),
+            'custom_subdomain': getattr(challenge, 'custom_subdomain', None),
+            
             'type_data': {
                 'id': DockerChallengeType.id,
                 'name': DockerChallengeType.name,
@@ -974,30 +1680,77 @@ class DockerChallengeType(BaseChallenge):
 		"""
         data = request.form or request.get_json()
         
-        # Handle the new format: "ServerName | ImageName"
+        # Handle the docker image selection - could be string or JSON
         docker_image_selection = data.get('docker_image', '')
         
-        if ' | ' in docker_image_selection:
-            # New format
-            server_name, image_name = docker_image_selection.split(' | ', 1)
+        # Try to parse as JSON first (new frontend format)
+        try:
+            if docker_image_selection.startswith('{'):
+                import json
+                selection_data = json.loads(docker_image_selection)
+                server_name = selection_data.get('server_name')
+                image_name = selection_data.get('image_name') or selection_data.get('name', '').replace(f"{server_name} | ", "")
+            elif ' | ' in docker_image_selection:
+                # Legacy format: "ServerName | ImageName"
+                server_name, image_name = docker_image_selection.split(' | ', 1)
+            else:
+                # Very old format - just image name
+                image_name = docker_image_selection
+                server_name = None
+        except (json.JSONDecodeError, ValueError) as e:
+            # Fallback to string parsing
+            if ' | ' in docker_image_selection:
+                server_name, image_name = docker_image_selection.split(' | ', 1)
+            else:
+                image_name = docker_image_selection
+                server_name = None
+        
+        # Find the server
+        if server_name:
             server = DockerConfig.query.filter_by(name=server_name, is_active=True).first()
             if not server:
                 raise Exception(f"Server '{server_name}' not found or inactive")
-            
-            challenge_data = dict(data)
-            challenge_data['docker_image'] = image_name
-            challenge_data['docker_config_id'] = server.id
         else:
-            # Backward compatibility: try to find any server that has this image
-            image_name = docker_image_selection
+            # Find best server for the image
             server = get_best_server_for_image(image_name)
             if not server:
-                # Fallback to first server for backward compatibility
                 server = DockerConfig.query.filter_by(is_active=True).first()
                 if not server:
                     raise Exception("No active Docker servers available")
+        
+        # Filter to only include valid DockerChallenge model fields
+        # These are the actual database columns from the DockerChallenge model
+        valid_fields = {
+            # Base Challenge fields
+            'name', 'category', 'description', 'value', 'state', 'max_attempts',
+            # DockerChallenge specific fields (matching the model exactly)
+            'docker_image', 'docker_config_id', 'challenge_type', 'docker_images', 
+            'primary_service', 'connection_type', 'instance_duration', 'custom_subdomain'
+        }
+        challenge_data = {k: v for k, v in data.items() if k in valid_fields}
+        challenge_data['type'] = 'docker'  # Set the challenge polymorphic type
+        
+        # Check if this is a multi-image challenge
+        if image_name.startswith('[MULTI] '):
+            # Multi-image challenge
+            group_name = image_name.replace('[MULTI] ', '')
+            challenge_data['challenge_type'] = 'multi'
+            challenge_data['docker_image'] = group_name  # Store group name for backward compatibility
+            challenge_data['docker_config_id'] = server.id
             
-            challenge_data = dict(data)
+            # Get the images for this group from server repositories
+            try:
+                repositories = get_repositories(server, group_compose=True)
+                for repo_data in repositories:
+                    if repo_data.get('type') == 'compose_group' and repo_data.get('name') == group_name:
+                        challenge_data['docker_images'] = repo_data.get('images', [])
+                        challenge_data['primary_service'] = repo_data.get('primary_service')
+                        break
+            except Exception as e:
+                current_app.logger.warning(f"Could not get compose group data: {str(e)}")
+        else:
+            # Single image challenge
+            challenge_data['challenge_type'] = 'single'
             challenge_data['docker_image'] = image_name
             challenge_data['docker_config_id'] = server.id
         
@@ -1019,8 +1772,7 @@ class DockerChallengeType(BaseChallenge):
 		"""
 
         data = request.form or request.get_json()
-        print(request.get_json())
-        print(data)
+
         submission = data["submission"].strip()
         flags = Flags.query.filter_by(challenge_id=challenge.id).all()
         for flag in flags:
@@ -1060,7 +1812,7 @@ class DockerChallengeType(BaseChallenge):
                 DockerChallengeTracker.query.filter_by(instance_id=docker_containers.instance_id).delete()
                 db.session.commit()
         except Exception as e:
-            print(f"Warning: Error cleaning up container on solve: {str(e)}")
+            current_app.logger.warning(f"Error cleaning up container on solve: {str(e)}")
             # Continue anyway
         
         solve = Solves(
@@ -1102,8 +1854,16 @@ class DockerChallengeType(BaseChallenge):
 class DockerChallenge(Challenges):
     __mapper_args__ = {'polymorphic_identity': 'docker'}
     id = db.Column(None, db.ForeignKey('challenges.id'), primary_key=True)
-    docker_image = db.Column(db.String(128), index=True)
+    docker_image = db.Column(db.String(128), index=True)  # Keep for backward compatibility
     docker_config_id = db.Column("docker_config_id", db.Integer, db.ForeignKey('docker_config.id'), index=True)  # Which server to use
+    
+    # New fields for enhanced functionality
+    challenge_type = db.Column("challenge_type", db.String(32), default='single')  # 'single' or 'multi'
+    docker_images = db.Column("docker_images", db.JSON, nullable=True)  # Array of images for multi-image challenges
+    primary_service = db.Column("primary_service", db.String(64), nullable=True)  # Which service is primary for multi-image
+    connection_type = db.Column("connection_type", db.String(32), default='tcp')  # 'tcp' or 'web'
+    instance_duration = db.Column("instance_duration", db.Integer, default=15)  # Duration in minutes
+    custom_subdomain = db.Column("custom_subdomain", db.String(128), nullable=True)  # Optional custom subdomain
     
     # Relationship to get server info
     docker_config = db.relationship('DockerConfig')
@@ -1119,37 +1879,96 @@ class ContainerAPI(Resource):
     # I wish this was Post... Issues with API/CSRF and whatnot. Open to a Issue solving this.
     def get(self):
         try:
-            container = request.args.get('name')
-            if not container:
-                return abort(403, "No container specified")
+            container_display = request.args.get('name')
+            if not container_display:
+                return {"success": False, "message": "No container specified"}, 403
             
-            # Basic input validation
-            if not isinstance(container, str) or len(container) > 256:
-                return abort(400, "Invalid container name")
+            # Check if this is a multi-image selection (display format contains indicators)
+            is_multi_image = False
+            actual_images = []
+            project_name = None
+            
+            # Detect multi-image format: "[MULTI] project_name (X images)"
+            if container_display.startswith('[MULTI] ') or '(2 images)' in container_display or '(3 images)' in container_display:
+                is_multi_image = True
+
+                
+                # Extract project name - remove [MULTI], count info, and [Unlabeled] parts
+                project_name = container_display
+                project_name = project_name.replace('[MULTI] ', '')
+                project_name = project_name.split(' (')[0]  # Remove "(X images) [Unlabeled]" part
+                project_name = project_name.strip()
+                
+
+            else:
+                # Parse the actual image name from the display format
+                container = parse_image_name_from_display(container_display)
+                
+                # Basic input validation
+                if not isinstance(container, str) or len(container) > 256:
+                    return {"success": False, "message": "Invalid container name"}, 400
+                
+
                 
             challenge = request.args.get('challenge')
             if not challenge:
-                return abort(403, "No challenge name specified")
+                return {"success": False, "message": "No challenge name specified"}, 403
                 
             # Basic input validation
             if not isinstance(challenge, str) or len(challenge) > 256:
-                return abort(400, "Invalid challenge name")
+                return {"success": False, "message": "Invalid challenge name"}, 400
             
-            # Find the best server for this container image
-            docker = get_best_server_for_image(container)
-            if not docker:
-                return abort(500, f"No available Docker server found for image: {container}")
+            # Get challenge ID from challenge name - use Challenges table, not DockerChallenge
+            from CTFd.models import Challenges
+            challenge_obj = Challenges.query.filter_by(name=challenge).first()
+            if not challenge_obj:
+                return {"success": False, "message": f"Challenge '{challenge}' not found"}, 404
+            challenge_id = challenge_obj.id
             
-            # Check if container exists in repository (skip if we can't get repo list)
-            try:
-                repositories = get_repositories(docker, tags=True)
-                if container not in repositories:
-                    print(f"Container {container} not found in repository list, will attempt to pull")
-                    # Don't abort here - let Docker try to pull the image
-            except Exception as e:
-                print(f"Warning: Could not get repository list from server {docker.name}: {str(e)}")
-                print("Continuing anyway - Docker will attempt to pull image if needed")
-                # Don't abort here - continue with the container operation
+            # Find the best server for this container image/group
+            if is_multi_image:
+                # For multi-image, we need to find a server and get the actual images
+                servers = DockerConfig.query.filter_by(is_active=True).all()
+                docker = None
+                
+                for server in servers:
+                    try:
+                        # Get repositories with compose grouping to find the actual images
+                        repositories = get_repositories(server, group_compose=True, challenge_id=challenge_id)
+                        
+                        # Look for the compose group matching our project name
+                        for repo_item in repositories:
+                            if isinstance(repo_item, dict) and repo_item.get('type') == 'compose_group':
+                                if repo_item.get('name') == project_name or repo_item.get('project_name') == project_name:
+                                    actual_images = repo_item.get('images', [])
+                                    docker = server
+
+                                    break
+                        
+                        if actual_images:
+                            break
+                    except Exception as e:
+                        current_app.logger.error(f"Error checking server {server.name}: {str(e)}")
+                        continue
+                
+                if not docker or not actual_images:
+                    return {"success": False, "message": f"No server found with multi-image group '{project_name}' or no images found"}, 500
+            else:
+                # Single image - use original logic
+                docker = get_best_server_for_image(container)
+                if not docker:
+                    return {"success": False, "message": f"No available Docker server found for image: {container}"}, 500
+                
+                # Check if container exists in repository (skip if we can't get repo list)
+                try:
+                    repositories = get_repositories(docker, tags=True)
+                    if container not in repositories:
+                        current_app.logger.info(f"Container {container} not found in repository list, will attempt to pull")
+                        # Don't abort here - let Docker try to pull the image
+                except Exception as e:
+                    current_app.logger.warning(f"Could not get repository list from server {docker.name}: {str(e)}")
+                    current_app.logger.info("Continuing anyway - Docker will attempt to pull image if needed")
+                    # Don't abort here - continue with the container operation
             
             # Get current session
             try:
@@ -1159,12 +1978,12 @@ class ContainerAPI(Resource):
                     session = get_current_user()
                     
                 if not session:
-                    return abort(403, "No valid session")
+                    return {"success": False, "message": "No valid session"}, 403
             except Exception as e:
-                print(f"Error getting session: {str(e)}")
+                current_app.logger.error(f"Error getting session: {str(e)}")
                 import traceback
                 traceback.print_exc()
-                return abort(500, "Failed to get user session")
+                return {"success": False, "message": "Failed to get user session"}, 500
             
             containers = DockerChallengeTracker.query.all()
             
@@ -1183,7 +2002,7 @@ class ContainerAPI(Resource):
                                 DockerChallengeTracker.query.filter_by(instance_id=i.instance_id).delete()
                                 db.session.commit()
                             except Exception as e:
-                                print(f"Error removing old team container: {str(e)}")
+                                current_app.logger.error(f"Error removing old team container: {str(e)}")
                     else:
                         if i.user_id is not None and int(session.id) == int(i.user_id) and container_age >= 7200:
                             try:
@@ -1192,94 +2011,154 @@ class ContainerAPI(Resource):
                                 DockerChallengeTracker.query.filter_by(instance_id=i.instance_id).delete()
                                 db.session.commit()
                             except Exception as e:
-                                print(f"Error removing old user container: {str(e)}")
+                                current_app.logger.error(f"Error removing old user container: {str(e)}")
             except Exception as e:
-                print(f"Error during old container cleanup: {str(e)}")
+                current_app.logger.error(f"Error during old container cleanup: {str(e)}")
                 import traceback
                 traceback.print_exc()
             
-            # Check for existing container for this specific image
+            # Check for existing container for this specific image/challenge
             # Also implement a basic rate limiting (minimum 30 seconds between requests)
+            
+            # First check if team/user already has ANY active challenge running
+            # This enforces one-challenge-per-team restriction
+            if is_teams_mode():
+                any_active_container = DockerChallengeTracker.query.filter_by(team_id=session.id).first()
+            else:
+                any_active_container = DockerChallengeTracker.query.filter_by(user_id=session.id).first()
+            
+            if any_active_container:
+                # Check if the existing container is for a different challenge
+                if any_active_container.challenge != challenge:
+                    # Log as info since this is expected behavior, not an error
+                    current_app.logger.info(f"Team/User {session.id} attempted to start challenge '{challenge}' while already running '{any_active_container.challenge}'")
+                    return {"success": False, "message": f"You already have an active container for challenge '{any_active_container.challenge}'. Please stop it before starting a new challenge."}, 403
+            
+            # Now check for existing container for this specific challenge
             try:
-                if is_teams_mode():
-                    check = DockerChallengeTracker.query.filter_by(team_id=session.id).filter_by(docker_image=container).first()
+                if is_multi_image:
+                    # For multi-image, check if any container for this challenge exists
+                    if is_teams_mode():
+                        check = DockerChallengeTracker.query.filter_by(team_id=session.id, challenge=challenge).first()
+                    else:
+                        check = DockerChallengeTracker.query.filter_by(user_id=session.id, challenge=challenge).first()
                 else:
-                    check = DockerChallengeTracker.query.filter_by(user_id=session.id).filter_by(docker_image=container).first()
+                    # For single image, check specific image
+                    if is_teams_mode():
+                        check = DockerChallengeTracker.query.filter_by(team_id=session.id).filter_by(docker_image=container).first()
+                    else:
+                        check = DockerChallengeTracker.query.filter_by(user_id=session.id).filter_by(docker_image=container).first()
                 
                 # Check if user is making requests too frequently
                 if check and (unix_time(datetime.utcnow()) - int(check.timestamp)) < 30:
-                    return abort(429, "Rate limit exceeded. Please wait at least 30 seconds between requests.")
+                    return {"success": False, "message": "Rate limit exceeded. Please wait at least 30 seconds between requests."}, 429
                     
             except Exception as e:
-                print(f"Error checking existing container: {str(e)}")
+                current_app.logger.error(f"Error checking existing container: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 check = None
             
-            # If this container is already created, we don't need another one.
-            if check != None and not (unix_time(datetime.utcnow()) - int(check.timestamp)) >= 300:
-                return abort(403,"To prevent abuse, dockers can be reverted and stopped after 5 minutes of creation.")
+            # If this container is already created and not expired, return existing container info
+            instance_duration = get_instance_duration(challenge_id)
+            if check != None and not (unix_time(datetime.utcnow()) - int(check.timestamp)) >= instance_duration:
+                # Container exists and is not expired - return existing container info
+                display_host = check.docker_config.domain if check.docker_config and check.docker_config.domain else str(check.host)
+                port_list = check.ports.split(',') if check.ports else []
+                return {
+                    "result": "Container already running",
+                    "hostname": display_host,
+                    "port": port_list[0] if port_list else None,
+                    "revert_time": check.revert_time,
+                    "existing": True
+                }
             # Delete when requested
             elif check != None and request.args.get('stopcontainer'):
                 try:
-                    if check.docker_config:
-                        delete_container(check.docker_config, check.instance_id)
-                    if is_teams_mode():
-                        DockerChallengeTracker.query.filter_by(team_id=session.id).filter_by(docker_image=container).delete()
+                    if is_multi_image or check.stack_id:
+                        # Multi-image challenge - delete entire stack
+                        if check.stack_id and check.docker_config:
+                            delete_compose_stack(check.docker_config, check.stack_id)
+                        # Delete all containers for this challenge/stack
+                        if is_teams_mode():
+                            DockerChallengeTracker.query.filter_by(team_id=session.id, challenge=challenge).delete()
+                        else:
+                            DockerChallengeTracker.query.filter_by(user_id=session.id, challenge=challenge).delete()
                     else:
-                        DockerChallengeTracker.query.filter_by(user_id=session.id).filter_by(docker_image=container).delete()
+                        # Single container
+                        if check.docker_config:
+                            delete_container(check.docker_config, check.instance_id)
+                        if is_teams_mode():
+                            DockerChallengeTracker.query.filter_by(team_id=session.id).filter_by(docker_image=container).delete()
+                        else:
+                            DockerChallengeTracker.query.filter_by(user_id=session.id).filter_by(docker_image=container).delete()
+                    
                     db.session.commit()
-                    return {"result": "Container stopped"}
+                    return {"result": "Container(s) stopped"}
                 except Exception as e:
-                    print(f"Error stopping container: {str(e)}")
+                    current_app.logger.error(f"Error stopping container: {str(e)}")
                     import traceback
                     traceback.print_exc()
-                    return abort(500, "Failed to stop container")
-            # The exception would be if we are reverting a box. So we'll delete it if it exists and has been around for more than 5 minutes.
+                    return {"success": False, "message": "Failed to stop container"}, 500
+            # The exception would be if we are reverting a box. So we'll delete it if it exists and has been around for more than the configured duration.
             elif check != None:
                 try:
-                    if check.docker_config:
-                        delete_container(check.docker_config, check.instance_id)
-                    if is_teams_mode():
-                        DockerChallengeTracker.query.filter_by(team_id=session.id).filter_by(docker_image=container).delete()
+                    if is_multi_image or check.stack_id:
+                        # Multi-image challenge - delete entire stack
+                        if check.stack_id and check.docker_config:
+                            delete_compose_stack(check.docker_config, check.stack_id)
+                        # Delete all containers for this challenge/stack
+                        if is_teams_mode():
+                            DockerChallengeTracker.query.filter_by(team_id=session.id, challenge=challenge).delete()
+                        else:
+                            DockerChallengeTracker.query.filter_by(user_id=session.id, challenge=challenge).delete()
                     else:
-                        DockerChallengeTracker.query.filter_by(user_id=session.id).filter_by(docker_image=container).delete()
+                        # Single container  
+                        if check.docker_config:
+                            delete_container(check.docker_config, check.instance_id)
+                        if is_teams_mode():
+                            DockerChallengeTracker.query.filter_by(team_id=session.id).filter_by(docker_image=container).delete()
+                        else:
+                            DockerChallengeTracker.query.filter_by(user_id=session.id).filter_by(docker_image=container).delete()
+                    
                     db.session.commit()
                 except Exception as e:
-                    print(f"Error deleting existing container: {str(e)}")
+                    current_app.logger.error(f"Error deleting existing container: {str(e)}")
                     import traceback
                     traceback.print_exc()
             
             # Check if a container is already running for this user. We need to recheck the DB first
-            # Also clean up any expired containers (older than 5 minutes)
+            # Also clean up any expired containers (older than configured duration)
             containers = DockerChallengeTracker.query.all()
             containers_to_remove = []
             
             for i in containers:
-                # Check if container has expired (older than 5 minutes = 300 seconds)
+                # Check if container has expired based on challenge-specific duration
                 current_time = unix_time(datetime.utcnow())
                 container_age = current_time - int(i.timestamp)
                 
-                if container_age >= 300:
+                # Get duration from challenge, default to 15 minutes if not found
+                instance_duration = 900  # Default 15 minutes
+                if i.challenge:
+                    try:
+                        challenge_config = DockerChallenge.query.filter_by(name=i.challenge).first()
+                        if challenge_config and challenge_config.instance_duration:
+                            instance_duration = challenge_config.instance_duration * 60
+                    except:
+                        pass  # Use default if challenge lookup fails
+                
+                if container_age >= instance_duration:
                     try:
                         if i.docker_config:
                             delete_container(i.docker_config, i.instance_id)
                         containers_to_remove.append(i)
                     except Exception as e:
-                        print(f"Error deleting expired container {i.instance_id}: {str(e)}")
+                        current_app.logger.error(f"Error deleting expired container {i.instance_id}: {str(e)}")
                         # Only remove from DB if Docker deletion was successful
                         continue
                     continue
                 
-                # Check if user already has a running container (not expired)
-                if is_teams_mode():
-                    # In teams mode, check team_id
-                    if i.team_id is not None and int(session.id) == int(i.team_id):
-                        return {"message": f"Another container is already running for challenge:<br><i><b>{i.challenge}</b></i>.<br>Please stop this first.<br>You can only run one container."}, 403
-                else:
-                    # In user mode, check user_id
-                    if i.user_id is not None and int(session.id) == int(i.user_id):
-                        return {"message": f"Another container is already running for challenge:<br><i><b>{i.challenge}</b></i>.<br>Please stop this first.<br>You can only run one container."}, 403
+                # This logic is now handled earlier in the function - no need for duplicate check
             
             # Remove expired containers from database
             for container_obj in containers_to_remove:
@@ -1287,48 +2166,113 @@ class ContainerAPI(Resource):
                     DockerChallengeTracker.query.filter_by(instance_id=container_obj.instance_id).delete()
                     db.session.commit()
                 except Exception as e:
-                    print(f"Error removing expired container from DB: {str(e)}")
+                    current_app.logger.error(f"Error removing expired container from DB: {str(e)}")
 
-            # Get ports and create container
-            try:
-                portsbl = get_unavailable_ports(docker)
-                
-                create = create_container(docker, container, session.name, portsbl)
-                
-                ports = json.loads(create[1])['HostConfig']['PortBindings'].values()
-                
-                # Determine what host/domain to show to user
-                display_host = docker.domain if docker.domain else str(docker.hostname).split(':')[0]
-                
-                entry = DockerChallengeTracker(
-                    team_id=session.id if is_teams_mode() else None,
-                    user_id=session.id if not is_teams_mode() else None,
-                    docker_image=container,
-                    timestamp=unix_time(datetime.utcnow()),
-                    revert_time=unix_time(datetime.utcnow()) + 300,
-                    instance_id=create[0]['Id'],
-                    ports=','.join([p[0]['HostPort'] for p in ports]),
-                    host=display_host,
-                    challenge=challenge,
-                    docker_config_id=docker.id
-                )
-                db.session.add(entry)
-                db.session.commit()
-                return {"result": "Container created successfully"}
-            except Exception as e:
-                print(f"Error creating container: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                return abort(500, f"Failed to create container: {str(e)}")
+            # Check if this is a multi-image selection or challenge
+            if is_multi_image or (challenge_obj and challenge_obj.challenge_type == 'multi' and challenge_obj.docker_images):
+                # Multi-image challenge - use compose stack creation
+                try:
+                    # Use actual images from server if we detected multi-image selection
+                    # Otherwise use challenge configuration
+                    images_to_use = actual_images if is_multi_image else challenge_obj.docker_images
+                    primary_service = challenge_obj.primary_service if challenge_obj else None
+                    
+
+                    
+                    stack_id, containers, primary_port, network_name = create_compose_stack(
+                        docker=docker,
+                        images=images_to_use,
+                        team=session.name,
+                        challenge_id=challenge_id,
+                        primary_service=primary_service
+                    )
+                    
+                    # Create tracker entries for all containers in the stack
+                    display_host = docker.domain if docker.domain else str(docker.hostname).split(':')[0]
+                    
+                    for container_info in containers:
+                        entry = DockerChallengeTracker(
+                            team_id=session.id if is_teams_mode() else None,
+                            user_id=session.id if not is_teams_mode() else None,
+                            docker_image=container_info['image'],
+                            timestamp=unix_time(datetime.utcnow()),
+                            revert_time=unix_time(datetime.utcnow()) + instance_duration,
+                            instance_id=container_info['id'],
+                            ports=','.join([str(p) for p in container_info['ports']]),
+                            host=display_host,
+                            challenge=challenge,
+                            docker_config_id=docker.id,
+                            stack_id=stack_id,
+                            service_name=container_info['service'],
+                            is_primary=container_info['is_primary'],
+                            network_name=network_name
+                        )
+                        db.session.add(entry)
+                    
+                    db.session.commit()
+                    
+                    # Return connection info for the primary service
+                    primary_container = next((c for c in containers if c['is_primary']), containers[0])
+                    return {
+                        "result": f"Container stack created successfully with {len(containers)} containers",
+                        "hostname": display_host,
+                        "port": primary_container['ports'][0] if primary_container['ports'] else None,
+                        "revert_time": unix_time(datetime.utcnow()) + instance_duration
+                    }
+                except Exception as e:
+                    current_app.logger.error(f"Error creating multi-container stack: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    return {"success": False, "message": f"Failed to create container stack: {str(e)}"}, 500
+
+            # Single image challenge - use original logic
+            if not is_multi_image:
+                # Get ports and create container
+                try:
+                    portsbl = get_unavailable_ports(docker)
+                    
+                    create = create_container(docker, container, session.name, portsbl, challenge_id=challenge_id)
+                    
+                    ports = json.loads(create[1])['HostConfig']['PortBindings'].values()
+                    
+                    # Determine what host/domain to show to user
+                    display_host = docker.domain if docker.domain else str(docker.hostname).split(':')[0]
+                    
+                    port_list = [p[0]['HostPort'] for p in ports]
+                    entry = DockerChallengeTracker(
+                        team_id=session.id if is_teams_mode() else None,
+                        user_id=session.id if not is_teams_mode() else None,
+                        docker_image=container,
+                        timestamp=unix_time(datetime.utcnow()),
+                        revert_time=unix_time(datetime.utcnow()) + instance_duration,
+                        instance_id=create[0]['Id'],
+                        ports=','.join(port_list),
+                        host=display_host,
+                        challenge=challenge,
+                        docker_config_id=docker.id
+                    )
+                    db.session.add(entry)
+                    db.session.commit()
+                    return {
+                        "result": "Container created successfully",
+                        "hostname": display_host,
+                        "port": port_list[0] if port_list else None,
+                        "revert_time": unix_time(datetime.utcnow()) + instance_duration
+                    }
+                except Exception as e:
+                    current_app.logger.error(f"Error creating container: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    return {"success": False, "message": f"Failed to create container: {str(e)}"}, 500
         
         except Exception as e:
-            print(f"ERROR in ContainerAPI.get(): {str(e)}")
+            current_app.logger.error(f"Error in ContainerAPI.get(): {str(e)}")
             import traceback
             traceback.print_exc()
-            return abort(500, f"Internal server error: {str(e)}")
+            return {"success": False, "message": f"Internal server error: {str(e)}"}, 500
 
 
-active_docker_namespace = Namespace("docker", description='Endpoint to retrieve User Docker Image Status')
+active_docker_namespace = Namespace("docker_status", description='Endpoint to retrieve User Docker Image Status')
 
 
 @active_docker_namespace.route("", methods=['POST', 'GET'])
@@ -1353,13 +2297,24 @@ class DockerStatus(Resource):
         
         for container in all_containers:
             container_age = unix_time(datetime.utcnow()) - int(container.timestamp)
-            if container_age >= 300:  # 5 minutes
+            
+            # Get duration from challenge, default to 15 minutes if not found
+            instance_duration = 900  # Default 15 minutes
+            if container.challenge:
+                try:
+                    challenge = DockerChallenge.query.filter_by(name=container.challenge).first()
+                    if challenge and challenge.instance_duration:
+                        instance_duration = challenge.instance_duration * 60
+                except:
+                    pass  # Use default if challenge lookup fails
+            
+            if container_age >= instance_duration:
                 try:
                     if container.docker_config:
                         delete_container(container.docker_config, container.instance_id)
                     global_containers_to_remove.append(container)
                 except Exception as e:
-                    print(f"Error deleting expired container {container.instance_id}: {str(e)}")
+                    current_app.logger.error(f"Error deleting expired container {container.instance_id}: {str(e)}")
                     # Still remove from DB even if Docker deletion fails
                     global_containers_to_remove.append(container)
         
@@ -1369,7 +2324,7 @@ class DockerStatus(Resource):
                 DockerChallengeTracker.query.filter_by(instance_id=container.instance_id).delete()
                 db.session.commit()
             except Exception as e:
-                print(f"Error removing expired container from DB: {str(e)}")
+                current_app.logger.error(f"Error removing expired container from DB: {str(e)}")
                 db.session.rollback()
         
         # Now get current user/team containers (after cleanup)
@@ -1382,14 +2337,23 @@ class DockerStatus(Resource):
         containers_to_remove = []
         
         for i in tracker:
-            # Check if container has expired (older than 5 minutes = 300 seconds)
-            if (unix_time(datetime.utcnow()) - int(i.timestamp)) >= 300:
+            # Check if container has expired based on challenge-specific duration
+            instance_duration = 900  # Default 15 minutes
+            if i.challenge:
+                try:
+                    challenge = DockerChallenge.query.filter_by(name=i.challenge).first()
+                    if challenge and challenge.instance_duration:
+                        instance_duration = challenge.instance_duration * 60
+                except:
+                    pass  # Use default if challenge lookup fails
+            
+            if (unix_time(datetime.utcnow()) - int(i.timestamp)) >= instance_duration:
                 try:
                     if i.docker_config:
                         delete_container(i.docker_config, i.instance_id)
                     containers_to_remove.append(i)
                 except Exception as e:
-                    print(f"Error deleting expired container {i.instance_id}: {str(e)}")
+                    current_app.logger.error(f"Error deleting expired container {i.instance_id}: {str(e)}")
                     # Only remove from DB if Docker deletion was successful
                     continue
                 continue
@@ -1409,7 +2373,8 @@ class DockerStatus(Resource):
                 'instance_id': i.instance_id,
                 'ports': i.ports.split(','),
                 'host': display_host,
-                'server_name': i.docker_config.name if i.docker_config else 'Unknown Server'
+                'server_name': i.docker_config.name if i.docker_config else 'Unknown Server',
+                'challenge_name': i.challenge
             })
         
         # Remove expired containers from database
@@ -1418,7 +2383,7 @@ class DockerStatus(Resource):
                 DockerChallengeTracker.query.filter_by(instance_id=container.instance_id).delete()
                 db.session.commit()
             except Exception as e:
-                print(f"Error removing expired container from DB: {str(e)}")
+                current_app.logger.error(f"Error removing expired container from DB: {str(e)}")
         
         return {
             'success': True,
@@ -1439,6 +2404,9 @@ class DockerAPI(Resource):
     @admins_only
     def get(self):
         try:
+
+            # Check if challenge_id is provided for filtering
+            challenge_id = request.args.get('challenge_id')
             servers = DockerConfig.query.filter_by(is_active=True).all()
             if not servers:
                 return {
@@ -1446,6 +2414,7 @@ class DockerAPI(Resource):
                     'data': [{'name': 'Error: No Docker servers configured!'}]
                 }, 400
             
+
             data = []
             
             for server in servers:
@@ -1455,26 +2424,51 @@ class DockerAPI(Resource):
                     if server.repositories:
                         server_repos = server.repositories.split(',')
                     
-                    images = get_repositories(server, tags=True, repos=server_repos)
+                    # Get both single images and compose groups
+
+                    images = get_repositories(server, tags=True, repos=server_repos, group_compose=True, challenge_id=challenge_id)
+
                     if images:
-                        for image in images:
-                            # Format: "ServerName | ImageName" for dropdown display
-                            display_name = f"{server.name} | {image}"
-                            data.append({
-                                'name': display_name,
-                                'server_id': server.id,
-                                'server_name': server.name,
-                                'image_name': image,
-                                'server_domain': server.domain
-                            })
+                        for item in images:
+
+                            if isinstance(item, dict) and item.get('type') == 'compose_group':
+                                # Multi-image compose group
+
+                                display_name = f"{server.name} | [MULTI] {item['display_name']}"
+                                data.append({
+                                    'name': display_name,
+                                    'server_id': server.id,
+                                    'server_name': server.name,
+                                    'type': 'multi',
+                                    'project_name': item['name'],
+                                    'images': item['images'],
+                                    'services': item['services'],
+                                    'image_count': item['image_count'],
+                                    'server_domain': server.domain,
+                                    'challenge_id': item.get('challenge_id'),
+                                    'is_labeled': item.get('is_labeled', False),
+                                    'group_key': item.get('group_key')
+                                })
+                            else:
+                                # Single image (existing logic)
+                                display_name = f"{server.name} | {item}"
+                                data.append({
+                                    'name': display_name,
+                                    'server_id': server.id,
+                                    'server_name': server.name,
+                                    'type': 'single',
+                                    'image_name': item,
+                                    'server_domain': server.domain
+                                })
                 except Exception as e:
-                    print(f"Error getting images from server {server.name}: {str(e)}")
+                    current_app.logger.error(f"Error getting images from server {server.name}: {str(e)}")
                     # Add error entry for this server
                     data.append({
                         'name': f"{server.name} | ERROR: {str(e)}",
                         'server_id': server.id,
                         'server_name': server.name,
                         'image_name': None,
+                        'type': 'error',
                         'error': True
                     })
             
@@ -1484,13 +2478,17 @@ class DockerAPI(Resource):
                     'data': [{'name': 'Error: No images found on any server!'}]
                 }, 400
             
+
+            for item in data:
+
+            
             return {
                 'success': True,
                 'data': data
             }
             
         except Exception as e:
-            print(f"Error in DockerAPI: {str(e)}")
+            current_app.logger.error(f"Error in DockerAPI: {str(e)}")
             return {
                 'success': False,
                 'data': [{'name': f'Error: {str(e)}'}]
@@ -1502,24 +2500,24 @@ def load(app):
     # Run migrations first
     try:
         upgrade(plugin_name="docker_challenges")
-        print("Docker challenges migrations completed successfully")
+        current_app.logger.info("Docker challenges migrations completed successfully")
     except Exception as e:
-        print(f"Migration failed: {str(e)}")
-        print("Attempting manual database creation...")
+        current_app.logger.error(f"Migration failed: {str(e)}")
+        current_app.logger.info("Attempting manual database creation...")
         
     # Create tables if they don't exist
     try:
         app.db.create_all()
-        print("Database tables created/verified successfully")
+        current_app.logger.info("Database tables created/verified successfully")
     except Exception as e:
-        print(f"Error creating database tables: {str(e)}")
+        current_app.logger.error(f"Error creating database tables: {str(e)}")
     
     # Run database migration for legacy data
     try:
         migrate_old_config()
     except Exception as e:
-        print(f"Legacy data migration failed: {str(e)}")
-        print("Plugin will continue loading but some features may not work correctly")
+        current_app.logger.error(f"Legacy data migration failed: {str(e)}")
+        current_app.logger.warning("Plugin will continue loading but some features may not work correctly")
     
     CHALLENGE_CLASSES['docker'] = DockerChallengeType
     
@@ -1542,10 +2540,10 @@ def load(app):
     # Start the background cleanup thread
     try:
         start_cleanup_thread(app)
-        print("Docker challenges plugin loaded with multi-server support and background cleanup")
+        current_app.logger.info("Docker challenges plugin loaded with multi-server support and background cleanup")
     except Exception as e:
-        print(f"Error starting cleanup thread: {str(e)}")
-        print("Plugin loaded but background cleanup is disabled")
+        current_app.logger.error(f"Error starting cleanup thread: {str(e)}")
+        current_app.logger.warning("Plugin loaded but background cleanup is disabled")
 
 
 def migrate_old_config():
@@ -1556,7 +2554,7 @@ def migrate_old_config():
         # First, check if we need to add new columns to existing table
         from sqlalchemy import text
         
-        print("Checking database schema for Docker plugin...")
+        current_app.logger.info("Checking database schema for Docker plugin...")
         
         # Check if new columns exist
         columns_to_add = [
@@ -1575,7 +2573,7 @@ def migrate_old_config():
                 result = db.session.execute(text(f"SELECT {column_name} FROM docker_config LIMIT 1")).fetchone()
             except Exception as e:
                 if "Unknown column" in str(e) or "no such column" in str(e):
-                    print(f"Adding missing column: {column_name}")
+                    current_app.logger.info(f"Adding missing column: {column_name}")
                     try:
                         # Add the missing column
                         db.session.execute(text(f"ALTER TABLE docker_config ADD COLUMN {column_name} {column_def}"))
@@ -1733,8 +2731,17 @@ def background_cleanup(app):
                 for container in containers:
                     container_age = current_time - container.timestamp
                     
-                    # Check if container has expired (older than 5 minutes = 300 seconds)
-                    if container_age >= 300:
+                    # Check if container has expired based on challenge-specific duration
+                    instance_duration = 900  # Default 15 minutes
+                    if container.challenge:
+                        try:
+                            challenge = DockerChallenge.query.filter_by(name=container.challenge).first()
+                            if challenge and challenge.instance_duration:
+                                instance_duration = challenge.instance_duration * 60
+                        except:
+                            pass  # Use default if challenge lookup fails
+                    
+                    if container_age >= instance_duration:
                         try:
                             # Use the container's associated docker config
                             if container.docker_config:

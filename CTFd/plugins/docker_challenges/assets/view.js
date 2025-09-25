@@ -1,4 +1,4 @@
-CTFd._internal.challenge.data = undefined
+CTFd._internal.challenge.data = undefined;
 
 CTFd._internal.challenge.renderer = CTFd._internal.markdown;
 
@@ -8,10 +8,8 @@ var statusIntervals = {};
 CTFd._internal.challenge.preRender = function() {}
 
 CTFd._internal.challenge.render = function(markdown) {
-
     return CTFd._internal.challenge.renderer.parse(markdown)
 }
-
 
 CTFd._internal.challenge.postRender = function() {
     const containername = CTFd._internal.challenge.data.docker_image;
@@ -36,43 +34,100 @@ function createWarningModalBody(){
 
 function get_docker_status(container) {
     // Don't fetch status if we're already actively running a timer for this container
-    if (statusIntervals[container]) {
-        return;
+    // But allow periodic updates to keep UI in sync
+    const currentTime = Date.now();
+    if (statusIntervals[container] && statusIntervals[container].lastUpdate && 
+        (currentTime - statusIntervals[container].lastUpdate) < 10000) {
+        return; // Skip if updated within last 10 seconds
     }
     
+    // Get challenge name from CTFd data
+    const challenge_name = CTFd._internal.challenge.data.name;
+    
     // Use CTFd.fetch to call the API
-    CTFd.fetch("/api/v1/docker_status").then(response => response.json())
-    .then(result => {
+    CTFd.fetch('/api/v1/docker_status', {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+    }).then(function(response) {
+        return response.json();
+    }).then(function(result) {
+
         let containerFound = false;
+        let containerInfo = null;
         
+        // For multi-image challenges, we need to find containers that belong to the same challenge
+        // rather than matching docker_image names exactly
         result.data.forEach(item => {
-            if (item.docker_image == container) {
+            if (item.challenge_name === challenge_name) {
                 containerFound = true;
-                
-                // Check if container has expired (5+ minutes old)
-                var currentTime = Math.floor(Date.now() / 1000);
-                var containerAge = currentTime - parseInt(item.timestamp);
-                
-                // Force reset if expired - be aggressive about cleanup
-                if (containerAge >= 300) {
-                    containerFound = false;
-                    return false; // Skip to next iteration
+                if (!containerInfo || item.is_primary) {
+                    containerInfo = item;
                 }
-                
+            }
+        });
+        
+
+        if (containerFound && containerInfo) {
+            // Check if container has expired (5+ minutes old)
+            var currentTime = Math.floor(Date.now() / 1000);
+            var containerAge = currentTime - parseInt(containerInfo.timestamp);
+            
+            if (is_expired) {
+                containerFound = false;
+                containerInfo = null;
+            } else {
                 // Split the ports and create the data string
-                var ports = String(item.ports).split(',');
+                var ports = String(containerInfo.ports).split(',');
                 
-                // Create connection details HTML
+                // Get challenge connection type and custom subdomain
+                const connectionType = CTFd._internal.challenge.data.connection_type || 'tcp';
+                const customSubdomain = CTFd._internal.challenge.data.custom_subdomain || '';
+                const challengeType = CTFd._internal.challenge.data.challenge_type || 'single';
+                
+                // Create connection details HTML based on connection type
                 var connectionDetails = '';
-                ports.forEach(port => {
-                    port = String(port).replace('/tcp', '');
-                    const command = `nc ${item.host} ${port}`;
-                    connectionDetails += `
-                        <div class="connection-item" style="margin: 4px 0;">
-                            <code style="font-family: monospace; color: #f87171; font-size: 13px;">${command}</code>
-                        </div>
-                    `;
-                });
+                
+                if (connectionType === 'web') {
+                    // Web challenge - show HTTP/HTTPS URLs
+                    ports.forEach(port => {
+                        port = String(port).replace('/tcp', '');
+                        let url;
+                        
+                        if (customSubdomain) {
+                            // Use custom subdomain
+                            url = `http://${customSubdomain}.h7tex.com:${port}`;
+                        } else if (containerInfo.host.includes('h7tex.com')) {
+                            // Use domain with port
+                            url = `http://${containerInfo.host}:${port}`;
+                        } else {
+                            // Fallback to IP with port
+                            url = `http://${containerInfo.host}:${port}`;
+                        }
+                        
+                        connectionDetails += `
+                            <div class="connection-item" style="margin: 4px 0;">
+                                <a href="${url}" target="_blank" style="color: #60a5fa; text-decoration: none; font-family: monospace; font-size: 13px;">
+                                    ${url} <i class="fas fa-external-link-alt" style="font-size: 10px; margin-left: 4px;"></i>
+                                </a>
+                            </div>
+                        `;
+                    });
+                } else {
+                    // TCP challenge - show nc commands
+                    ports.forEach(port => {
+                        port = String(port).replace('/tcp', '');
+                        const command = `nc ${containerInfo.host} ${port}`;
+                        connectionDetails += `
+                            <div class="connection-item" style="margin: 4px 0;">
+                                <code style="font-family: monospace; color: #f87171; font-size: 13px;">${command}</code>
+                            </div>
+                        `;
+                    });
+                }
                 
                 // Update the DOM with docker container information
                 const dockerContainer = CTFd.lib.$('#docker_container');
@@ -89,7 +144,7 @@ function get_docker_status(container) {
                                     ${connectionDetails}
                                 </div>
                             </div>
-                            <div class="timer-section" id="${String(item.instance_id).substring(0, 10)}_revert_container">
+                            <div class="timer-section" id="${String(containerInfo.instance_id).substring(0, 10)}_revert_container">
                                 <!-- Timer or buttons will appear here -->
                             </div>
                         </div>
@@ -101,7 +156,7 @@ function get_docker_status(container) {
                 // Fix for connection info placeholders
                 var $link = CTFd.lib.$('.challenge-connection-info');
                 if ($link.length > 0 && $link.html()) {
-                    $link.html($link.html().replace(/host/gi, item.host));
+                    $link.html($link.html().replace(/host/gi, containerInfo.host));
                     $link.html($link.html().replace(/port|\b\d{5}\b/gi, ports[0].split("/")[0]));
                 }
 
@@ -118,12 +173,12 @@ function get_docker_status(container) {
                 });
 
                 // Set up countdown timer
-                var countDownDate = new Date(parseInt(item.revert_time) * 1000).getTime();
+                var countDownDate = new Date(parseInt(containerInfo.revert_time) * 1000).getTime();
                 
                 // Clear any existing interval for this container
-                if (statusIntervals[item.docker_image]) {
-                    clearInterval(statusIntervals[item.docker_image]);
-                    delete statusIntervals[item.docker_image];
+                if (statusIntervals[containerInfo.docker_image]) {
+                    clearInterval(statusIntervals[containerInfo.docker_image].interval);
+                    delete statusIntervals[containerInfo.docker_image];
                 }
                 
                 var x = setInterval(function() {
@@ -133,12 +188,12 @@ function get_docker_status(container) {
                     var seconds = Math.floor((distance % (1000 * 60)) / 1000);
                     if (seconds < 10) seconds = "0" + seconds;
                     
-                    const timerElement = CTFd.lib.$("#" + String(item.instance_id).substring(0, 10) + "_revert_container");
+                    const timerElement = CTFd.lib.$("#" + String(containerInfo.instance_id).substring(0, 10) + "_revert_container");
                     
                     // Check if timer element still exists
                     if (timerElement.length === 0) {
                         clearInterval(x);
-                        delete statusIntervals[item.docker_image];
+                        delete statusIntervals[containerInfo.docker_image];
                         return;
                     }
 
@@ -148,15 +203,15 @@ function get_docker_status(container) {
                         .then(result => {
                             let stillRunning = false;
                             result.data.forEach(statusItem => {
-                                if (statusItem.docker_image === item.docker_image && statusItem.instance_id === item.instance_id) {
+                                if (statusItem.docker_image === containerInfo.docker_image && statusItem.instance_id === containerInfo.instance_id) {
                                     stillRunning = true;
                                 }
                             });
                             
                             if (!stillRunning) {
                                 clearInterval(x);
-                                delete statusIntervals[item.docker_image];
-                                resetToNormalState(item.docker_image);
+                                delete statusIntervals[containerInfo.docker_image];
+                                resetToNormalState(containerInfo.docker_image);
                                 return;
                             }
                         })
@@ -178,7 +233,7 @@ function get_docker_status(container) {
                     } else {
                         // Time expired, show revert/stop buttons
                         clearInterval(x);
-                        delete statusIntervals[item.docker_image];
+                        delete statusIntervals[containerInfo.docker_image];
                         
                         const dockerContainer = CTFd.lib.$('#docker_container');
                         const expiredHTML = `
@@ -187,7 +242,7 @@ function get_docker_status(container) {
                                     <div class="timer-section" style="display: flex; justify-content: center; align-items: center; width: 100%;">
                                         <div class="docker-actions" style="display: flex; justify-content: center; align-items: center; width: 100%;">
                                             <div class="action-buttons" style="display: flex; gap: 15px; justify-content: center; align-items: center;">
-                                                <button onclick="start_container('${item.docker_image}');" style="
+                                                <button onclick="start_container('${containerInfo.docker_image}');" style="
                                                     background: #1e40af;
                                                     border: none; border-radius: 4px; color: #ffffff;
                                                     padding: 10px 18px; font-size: 13px; font-weight: 500;
@@ -195,7 +250,7 @@ function get_docker_status(container) {
                                                     display: flex; align-items: center; justify-content: center;">
                                                     <i class="fas fa-redo" style="margin-right: 5px;"></i> Revert
                                                 </button>
-                                                <button onclick="stop_container('${item.docker_image}');" style="
+                                                <button onclick="stop_container('${containerInfo.docker_image}');" style="
                                                     background: #dc2626;
                                                     border: none; border-radius: 4px; color: #ffffff;
                                                     padding: 10px 18px; font-size: 13px; font-weight: 500;
@@ -214,17 +269,19 @@ function get_docker_status(container) {
                         
                         // After 30 seconds of showing revert/stop buttons, auto-reset to launch
                         setTimeout(() => {
-                            resetToNormalState(item.docker_image);
+                            resetToNormalState(containerInfo.docker_image);
                         }, 30000);
                     }
                 }, 1000);
                 
-                // Track the interval for cleanup
-                statusIntervals[item.docker_image] = x;
-
-                return false; // Stop once the correct container is found
+                // Track the interval for cleanup with metadata
+                statusIntervals[containerInfo.docker_image] = {
+                    interval: x,
+                    lastUpdate: Date.now(),
+                    containerId: containerInfo.instance_id
+                };
             }
-        });
+        }
         
         // If no active container found, show launch button
         if (!containerFound) {
@@ -298,9 +355,12 @@ function start_container(container) {
             return response.json().then(function (json) {
                 get_docker_status(container);
                 
+                // Get instance duration from challenge data, default to 15 minutes
+                const instanceDuration = CTFd._internal.challenge.data.instance_duration || 15;
+                
                 updateWarningModal({
                     title: "Instance Deployed",
-                    warningText: "Your challenge container is active.<br><small>Restart or stop actions are limited to once every 5 minutes.</small>",
+                    warningText: `Your challenge container is active.<br><small>Restart or stop actions are limited to once every ${instanceDuration} minutes.</small>`,
                     buttonText: "Close"
                 });
             });

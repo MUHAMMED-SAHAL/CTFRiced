@@ -950,9 +950,9 @@ def get_repositories(docker, tags=False, repos=False, group_compose=False, chall
                         'is_labeled': data['is_labeled']
                     })
                 else:
-                    # Single image in project - add to regular results
+                    # Single image in project - add to regular results as individual image
                     if data['images']:
-                        result.extend(data['images'])
+                        final_result.extend(data['images'])
 
             return final_result
         

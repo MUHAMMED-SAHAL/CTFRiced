@@ -2,6 +2,7 @@ import traceback
 import logging
 import threading
 import time
+import os
 from datetime import datetime
 import socket
 import tempfile
@@ -694,62 +695,104 @@ def do_request(docker, url, headers=None, method='GET', timeout=30, data=None):
     host = docker.hostname
     URL_TEMPLATE = '%s://%s' % (prefix, host)
     
+    current_app.logger.info(f"do_request: {method} {URL_TEMPLATE}{url} (TLS: {tls})")
+    
     try:
         if tls:
             cert, verify = get_client_cert(docker)
-            if method == 'GET':
-                r = requests.get(url=f"%s{url}" % URL_TEMPLATE, cert=cert, verify=verify, headers=headers, timeout=timeout)
-            elif method == 'DELETE':
-                r = requests.delete(url=f"%s{url}" % URL_TEMPLATE, cert=cert, verify=verify, headers=headers, timeout=timeout)
-            elif method == 'POST':
-                r = requests.post(url=f"%s{url}" % URL_TEMPLATE, cert=cert, verify=verify, headers=headers, timeout=timeout, data=data)
-            # Clean up the cert files:
-            for file_path in [*cert, verify]:
-                if file_path:
-                    Path(file_path).unlink(missing_ok=True)
+            
+            # Check if certificates were created successfully
+            if cert is None or verify is None:
+                current_app.logger.error(f"Failed to create TLS certificates for {docker.name}. Cannot connect to Docker API.")
+                return None
+            
+            # Make TLS request with proper error handling
+            try:
+                if method == 'GET':
+                    r = requests.get(url=f"%s{url}" % URL_TEMPLATE, cert=cert, verify=verify, headers=headers, timeout=timeout)
+                elif method == 'DELETE':
+                    r = requests.delete(url=f"%s{url}" % URL_TEMPLATE, cert=cert, verify=verify, headers=headers, timeout=timeout)
+                elif method == 'POST':
+                    r = requests.post(url=f"%s{url}" % URL_TEMPLATE, cert=cert, verify=verify, headers=headers, timeout=timeout, data=data)
+                
+                # Clean up the cert files after successful/failed request
+                cleanup_files = []
+                if cert:
+                    cleanup_files.extend(cert)
+                if verify:
+                    cleanup_files.append(verify)
+                
+                for file_path in cleanup_files:
+                    if file_path and os.path.exists(file_path):
+                        try:
+                            os.unlink(file_path)
+                        except Exception as cleanup_error:
+                            current_app.logger.warning(f"Failed to cleanup cert file {file_path}: {cleanup_error}")
+                
+                return r
+                
+            except requests.exceptions.SSLError as ssl_error:
+                current_app.logger.error(f"SSL/TLS error connecting to {URL_TEMPLATE}{url}: {str(ssl_error)}")
+                current_app.logger.error(f"This usually means: 1) Client certificates are invalid, 2) Server requires different certificates, 3) Certificate chain is incomplete")
+                return None
         else:
+            # Non-TLS request
             if method == 'GET':
                 r = requests.get(url=f"%s{url}" % URL_TEMPLATE, headers=headers, timeout=timeout)
             elif method == 'DELETE':
                 r = requests.delete(url=f"%s{url}" % URL_TEMPLATE, headers=headers, timeout=timeout)
             elif method == 'POST':
                 r = requests.post(url=f"%s{url}" % URL_TEMPLATE, headers=headers, timeout=timeout, data=data)
-        return r
+            return r
+            
     except requests.exceptions.Timeout:
-        current_app.logger.warning(f"Timeout making request to {URL_TEMPLATE}{url}")
+        current_app.logger.error(f"Timeout connecting to {URL_TEMPLATE}{url} (waited {timeout}s)")
         return None
-    except requests.exceptions.ConnectionError:
-        current_app.logger.error(f"Connection error making request to {URL_TEMPLATE}{url}")
+    except requests.exceptions.ConnectionError as conn_error:
+        current_app.logger.error(f"Connection error to {URL_TEMPLATE}{url}: {str(conn_error)}")
+        current_app.logger.error(f"Check: 1) Server is running, 2) Port {host.split(':')[-1]} is open, 3) Firewall allows connection")
         return None
     except Exception as e:
-        current_app.logger.error(f"Error making request to {URL_TEMPLATE}{url}: {str(e)}")
+        current_app.logger.error(f"Unexpected error connecting to {URL_TEMPLATE}{url}: {str(e)}")
         return None
 
 
 def get_client_cert(docker):
-    # this can be done more efficiently, but works for now.
+    # Create TLS certificates for Docker API authentication
     try:
         ca = docker.ca_cert
         client = docker.client_cert
         ckey = docker.client_key
         
+        # Validate that all certificate fields are present and not empty
+        if not ca or not client or not ckey:
+            current_app.logger.error(f"Missing TLS certificates for server {docker.name}. CA: {bool(ca)}, Client: {bool(client)}, Key: {bool(ckey)}")
+            return None, None
+        
+        # Check if certificates are properly formatted (basic validation)
+        if not (ca.strip().startswith('-----BEGIN') and client.strip().startswith('-----BEGIN') and ckey.strip().startswith('-----BEGIN')):
+            current_app.logger.error(f"Invalid certificate format for server {docker.name}")
+            return None, None
+        
         # Create temporary files with proper cleanup
         ca_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.pem')
-        ca_file.write(ca)
+        ca_file.write(ca.strip())
         ca_file.close()
         
         client_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.pem')
-        client_file.write(client)
+        client_file.write(client.strip())
         client_file.close()
         
         key_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.pem')
-        key_file.write(ckey)
+        key_file.write(ckey.strip())
         key_file.close()
         
         CERT = (client_file.name, key_file.name)
-    except Exception:
-        CERT = None
-    return CERT, ca_file.name if 'ca_file' in locals() else None
+        current_app.logger.info(f"Created TLS certificates for server {docker.name}")
+        return CERT, ca_file.name
+    except Exception as e:
+        current_app.logger.error(f"Error creating TLS certificates for server {docker.name}: {str(e)}")
+        return None, None
 
 
 # For the Docker Config Page. Gets the Current Repositories available on the Docker Server.
@@ -768,13 +811,15 @@ def get_repositories(docker, tags=False, repos=False, group_compose=False, chall
         List of images or grouped compose projects
     """
     try:
+        current_app.logger.info(f"Fetching repositories from Docker server: {docker.name} ({docker.hostname})")
+        current_app.logger.info(f"get_repositories: Making Docker API request to {docker.hostname}:{docker.port}")
         r = do_request(docker, '/images/json?all=1')
         if r is None:
-            current_app.logger.error("Docker API request returned None for /images/json")
+            current_app.logger.error(f"Docker API request returned None for /images/json on {docker.hostname}:{docker.port}")
             return []
         
         if not hasattr(r, 'status_code') or r.status_code != 200:
-            current_app.logger.error(f"Docker API returned status {r.status_code if hasattr(r, 'status_code') else 'unknown'}")
+            current_app.logger.error(f"Docker API returned status {r.status_code if hasattr(r, 'status_code') else 'unknown'} on {docker.hostname}:{docker.port}")
             return []
         
         result = list()
@@ -2449,11 +2494,15 @@ class DockerAPI(Resource):
     @admins_only
     def get(self):
         try:
+            current_app.logger.info("DockerAPI.get() called")
 
             # Check if challenge_id is provided for filtering
             challenge_id = request.args.get('challenge_id')
             servers = DockerConfig.query.filter_by(is_active=True).all()
+            current_app.logger.info(f"Found {len(servers)} active servers")
+            
             if not servers:
+                current_app.logger.error("No active Docker servers configured")
                 return {
                     'success': False,
                     'data': [{'name': 'Error: No Docker servers configured!'}]
@@ -2464,14 +2513,28 @@ class DockerAPI(Resource):
             
             for server in servers:
                 try:
+                    current_app.logger.info(f"Processing server: {server.name} ({server.hostname})")
+                    
+                    # Check TLS configuration first
+                    if server.tls_enabled:
+                        if not server.ca_cert or not server.client_cert or not server.client_key:
+                            current_app.logger.error(f"Server {server.name} has TLS enabled but missing certificates")
+                            data.append({
+                                'name': f'⚠️ {server.name}',
+                                'options': [{'name': f'Error: {server.name} - Missing TLS certificates. Please upload CA, client certificate, and client key.'}]
+                            })
+                            continue
+                    
                     # Convert repositories string to list if it exists
                     server_repos = None
                     if server.repositories:
                         server_repos = server.repositories.split(',')
+                        current_app.logger.info(f"Server {server.name} allowed repos: {server_repos}")
                     
                     # Get both single images and compose groups
-
+                    current_app.logger.info(f"Calling get_repositories for server {server.name}")
                     images = get_repositories(server, tags=True, repos=server_repos, group_compose=True, challenge_id=challenge_id)
+                    current_app.logger.info(f"get_repositories returned {len(images) if images else 0} items for server {server.name}")
 
                     if images:
                         for item in images:
@@ -2507,12 +2570,22 @@ class DockerAPI(Resource):
                                 })
                 except Exception as e:
                     current_app.logger.error(f"Error getting images from server {server.name}: {str(e)}")
+                    import traceback
+                    current_app.logger.error(f"Full traceback: {traceback.format_exc()}")
+                    
+                    # Provide specific error messages based on the error type
+                    error_msg = str(e)
+                    if "SSL" in error_msg or "TLS" in error_msg or "certificate" in error_msg.lower():
+                        error_msg = "TLS Certificate Error - Check certificates"
+                    elif "Connection" in error_msg or "timeout" in error_msg.lower():
+                        error_msg = "Connection Error - Server unreachable"
+                    else:
+                        error_msg = f"Error: {str(e)[:50]}..."
+                    
                     # Add error entry for this server
                     data.append({
-                        'name': f"{server.name} | ERROR: {str(e)}",
-                        'server_id': server.id,
-                        'server_name': server.name,
-                        'image_name': None,
+                        'name': f"⚠️ {server.name}",
+                        'options': [{'name': f'{server.name} - {error_msg}'}]
                         'type': 'error',
                         'error': True
                     })

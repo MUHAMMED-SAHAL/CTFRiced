@@ -812,14 +812,14 @@ def get_repositories(docker, tags=False, repos=False, group_compose=False, chall
     """
     try:
         current_app.logger.info(f"Fetching repositories from Docker server: {docker.name} ({docker.hostname})")
-        current_app.logger.info(f"get_repositories: Making Docker API request to {docker.hostname}:{docker.port}")
+        current_app.logger.info(f"get_repositories: Making Docker API request to {docker.hostname}")
         r = do_request(docker, '/images/json?all=1')
         if r is None:
-            current_app.logger.error(f"Docker API request returned None for /images/json on {docker.hostname}:{docker.port}")
+            current_app.logger.error(f"Docker API request returned None for /images/json on {docker.hostname}")
             return []
         
         if not hasattr(r, 'status_code') or r.status_code != 200:
-            current_app.logger.error(f"Docker API returned status {r.status_code if hasattr(r, 'status_code') else 'unknown'} on {docker.hostname}:{docker.port}")
+            current_app.logger.error(f"Docker API returned status {r.status_code if hasattr(r, 'status_code') else 'unknown'} on {docker.hostname}")
             return []
         
         result = list()

@@ -1679,15 +1679,12 @@ class DockerChallengeType(BaseChallenge):
 		:param request:
 		:return:
 		"""
-        current_app.logger.error(f"🔥 UPDATE METHOD CALLED - Challenge ID: {challenge.id}, Name: {challenge.name}")
         data = request.form or request.get_json()
-        current_app.logger.error(f"🔥 UPDATE DATA RECEIVED: {data}")
         
         # Handle docker_image field specially - it might contain server info
         # The frontend sends 'docker_selection' but we need to process it as 'docker_image'
         if 'docker_selection' in data:
             data['docker_image'] = data.pop('docker_selection')
-            current_app.logger.error(f"🔥 Renamed docker_selection to docker_image: {data['docker_image']}")
         
         if 'docker_image' in data:
             docker_image_selection = data['docker_image']

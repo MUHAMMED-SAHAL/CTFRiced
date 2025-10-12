@@ -1684,22 +1684,31 @@ class DockerChallengeType(BaseChallenge):
         # Handle docker_image field specially - it might contain server info
         if 'docker_image' in data:
             docker_image_selection = data['docker_image']
+            current_app.logger.info(f"Update: docker_image selection = {docker_image_selection}")
+            
+            server = None
+            image_name = docker_image_selection
+            server_name = None
             
             # Try to parse as JSON first (new frontend format)
             try:
-                if docker_image_selection.startswith('{'):
+                if docker_image_selection and docker_image_selection.startswith('{'):
                     import json
                     selection_data = json.loads(docker_image_selection)
                     server_name = selection_data.get('server_name')
                     image_name = selection_data.get('image_name') or selection_data.get('name', '').replace(f"{server_name} | ", "")
+                    current_app.logger.info(f"JSON format: server={server_name}, image={image_name}")
                 elif ' | ' in docker_image_selection:
                     # Legacy format: "ServerName | ImageName"
                     server_name, image_name = docker_image_selection.split(' | ', 1)
+                    current_app.logger.info(f"Legacy format: server={server_name}, image={image_name}")
                 else:
                     # Just image name
                     image_name = docker_image_selection
                     server_name = None
+                    current_app.logger.info(f"Plain image name: {image_name}")
             except (json.JSONDecodeError, ValueError) as e:
+                current_app.logger.error(f"Error parsing docker_image: {e}")
                 # Fallback to string parsing
                 if ' | ' in docker_image_selection:
                     server_name, image_name = docker_image_selection.split(' | ', 1)
@@ -1711,7 +1720,20 @@ class DockerChallengeType(BaseChallenge):
             if server_name:
                 server = DockerConfig.query.filter_by(name=server_name, is_active=True).first()
                 if server:
+                    current_app.logger.info(f"Found server: {server.name} (ID: {server.id})")
                     challenge.docker_config_id = server.id
+                else:
+                    current_app.logger.warning(f"Server '{server_name}' not found or inactive")
+            else:
+                # If no server specified, try to keep existing server or find one
+                if not challenge.docker_config_id:
+                    server = DockerConfig.query.filter_by(is_active=True).first()
+                    if server:
+                        current_app.logger.info(f"Using first available server: {server.name}")
+                        challenge.docker_config_id = server.id
+                else:
+                    server = DockerConfig.query.filter_by(id=challenge.docker_config_id).first()
+                    current_app.logger.info(f"Keeping existing server ID: {challenge.docker_config_id}")
             
             # Check if this is a multi-image challenge
             if image_name.startswith('[MULTI] '):
@@ -1719,6 +1741,7 @@ class DockerChallengeType(BaseChallenge):
                 group_name = image_name.replace('[MULTI] ', '')
                 challenge.challenge_type = 'multi'
                 challenge.docker_image = group_name
+                current_app.logger.info(f"Multi-image challenge: {group_name}")
                 
                 # Get the images for this group from server repositories
                 if server:
@@ -1728,6 +1751,7 @@ class DockerChallengeType(BaseChallenge):
                             if repo_data.get('type') == 'compose_group' and repo_data.get('name') == group_name:
                                 challenge.docker_images = repo_data.get('images', [])
                                 challenge.primary_service = repo_data.get('primary_service')
+                                current_app.logger.info(f"Set docker_images: {challenge.docker_images}")
                                 break
                     except Exception as e:
                         current_app.logger.warning(f"Could not get compose group data during update: {str(e)}")
@@ -1737,6 +1761,7 @@ class DockerChallengeType(BaseChallenge):
                 challenge.docker_image = image_name
                 challenge.docker_images = None
                 challenge.primary_service = None
+                current_app.logger.info(f"Single image challenge: {image_name}")
         
         # Update other attributes normally, excluding docker_image (already handled)
         for attr, value in data.items():
@@ -1745,7 +1770,13 @@ class DockerChallengeType(BaseChallenge):
                 if hasattr(challenge, attr):
                     setattr(challenge, attr, value)
 
+        # Ensure changes are committed
+        db.session.flush()
         db.session.commit()
+        db.session.refresh(challenge)
+        
+        current_app.logger.info(f"Challenge updated - ID: {challenge.id}, docker_image: {challenge.docker_image}, docker_config_id: {challenge.docker_config_id}")
+        
         return challenge
 
     @staticmethod
@@ -1810,11 +1841,21 @@ class DockerChallengeType(BaseChallenge):
 		:return: Challenge object, data dictionary to be returned to the user
 		"""
         challenge = DockerChallenge.query.filter_by(id=challenge.id).first()
+        
+        # Format docker_image with server name for dropdown to display correctly
+        docker_image_display = challenge.docker_image
+        if challenge.docker_config:
+            # Include server name in the format that the dropdown expects
+            if challenge.challenge_type == 'multi':
+                docker_image_display = f"{challenge.docker_config.name} | [MULTI] {challenge.docker_image}"
+            else:
+                docker_image_display = f"{challenge.docker_config.name} | {challenge.docker_image}"
+        
         data = {
             'id': challenge.id,
             'name': challenge.name,
             'value': challenge.value,
-            'docker_image': challenge.docker_image,
+            'docker_image': docker_image_display,  # Use formatted version for dropdown
             'docker_config_id': challenge.docker_config_id,
             'server_name': challenge.docker_config.name if challenge.docker_config else 'Unknown Server',
             'description': challenge.description,

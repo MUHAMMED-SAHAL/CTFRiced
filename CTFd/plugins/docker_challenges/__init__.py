@@ -1679,7 +1679,9 @@ class DockerChallengeType(BaseChallenge):
 		:param request:
 		:return:
 		"""
+        current_app.logger.error(f"🔥 UPDATE METHOD CALLED - Challenge ID: {challenge.id}, Name: {challenge.name}")
         data = request.form or request.get_json()
+        current_app.logger.error(f"🔥 UPDATE DATA RECEIVED: {data}")
         
         # Handle docker_image field specially - it might contain server info
         if 'docker_image' in data:

@@ -1680,8 +1680,70 @@ class DockerChallengeType(BaseChallenge):
 		:return:
 		"""
         data = request.form or request.get_json()
+        
+        # Handle docker_image field specially - it might contain server info
+        if 'docker_image' in data:
+            docker_image_selection = data['docker_image']
+            
+            # Try to parse as JSON first (new frontend format)
+            try:
+                if docker_image_selection.startswith('{'):
+                    import json
+                    selection_data = json.loads(docker_image_selection)
+                    server_name = selection_data.get('server_name')
+                    image_name = selection_data.get('image_name') or selection_data.get('name', '').replace(f"{server_name} | ", "")
+                elif ' | ' in docker_image_selection:
+                    # Legacy format: "ServerName | ImageName"
+                    server_name, image_name = docker_image_selection.split(' | ', 1)
+                else:
+                    # Just image name
+                    image_name = docker_image_selection
+                    server_name = None
+            except (json.JSONDecodeError, ValueError) as e:
+                # Fallback to string parsing
+                if ' | ' in docker_image_selection:
+                    server_name, image_name = docker_image_selection.split(' | ', 1)
+                else:
+                    image_name = docker_image_selection
+                    server_name = None
+            
+            # Find the server
+            if server_name:
+                server = DockerConfig.query.filter_by(name=server_name, is_active=True).first()
+                if server:
+                    challenge.docker_config_id = server.id
+            
+            # Check if this is a multi-image challenge
+            if image_name.startswith('[MULTI] '):
+                # Multi-image challenge
+                group_name = image_name.replace('[MULTI] ', '')
+                challenge.challenge_type = 'multi'
+                challenge.docker_image = group_name
+                
+                # Get the images for this group from server repositories
+                if server:
+                    try:
+                        repositories = get_repositories(server, group_compose=True)
+                        for repo_data in repositories:
+                            if repo_data.get('type') == 'compose_group' and repo_data.get('name') == group_name:
+                                challenge.docker_images = repo_data.get('images', [])
+                                challenge.primary_service = repo_data.get('primary_service')
+                                break
+                    except Exception as e:
+                        current_app.logger.warning(f"Could not get compose group data during update: {str(e)}")
+            else:
+                # Single image challenge
+                challenge.challenge_type = 'single'
+                challenge.docker_image = image_name
+                challenge.docker_images = None
+                challenge.primary_service = None
+        
+        # Update other attributes normally, excluding docker_image (already handled)
         for attr, value in data.items():
-            setattr(challenge, attr, value)
+            if attr != 'docker_image':  # Already processed above
+                # Only update if attribute exists on the model
+                if hasattr(challenge, attr):
+                    setattr(challenge, attr, value)
 
         db.session.commit()
         return challenge
@@ -1695,6 +1757,36 @@ class DockerChallengeType(BaseChallenge):
 		:param challenge:
 		:return:
 		"""
+        # Delete all running containers for this challenge first
+        try:
+            docker_containers = DockerChallengeTracker.query.filter_by(challenge=challenge.name).all()
+            for container in docker_containers:
+                try:
+                    if container.docker_config:
+                        if container.stack_id:
+                            # Multi-image challenge - delete entire stack
+                            delete_compose_stack(container.docker_config, container.stack_id)
+                        else:
+                            # Single container
+                            delete_container(container.docker_config, container.instance_id)
+                except Exception as e:
+                    current_app.logger.error(f"Error deleting container {container.instance_id}: {str(e)}")
+            # Remove all containers from tracker
+            DockerChallengeTracker.query.filter_by(challenge=challenge.name).delete()
+        except Exception as e:
+            current_app.logger.error(f"Error cleaning up docker containers: {str(e)}")
+        
+        # Delete anti_cheat_alerts if the plugin is loaded
+        try:
+            # Import here to avoid dependency issues if anti_cheat plugin is not loaded
+            from CTFd.plugins.anti_cheat import AntiCheatAlert
+            AntiCheatAlert.query.filter_by(challenge_id=challenge.id).delete()
+        except ImportError:
+            # Anti-cheat plugin not loaded, skip
+            pass
+        except Exception as e:
+            current_app.logger.error(f"Error deleting anti_cheat_alerts: {str(e)}")
+        
         Fails.query.filter_by(challenge_id=challenge.id).delete()
         Solves.query.filter_by(challenge_id=challenge.id).delete()
         Flags.query.filter_by(challenge_id=challenge.id).delete()
@@ -2008,6 +2100,11 @@ class ContainerAPI(Resource):
                 return {"success": False, "message": f"Challenge '{challenge}' not found"}, 404
             challenge_id = challenge_obj.id
             
+            # Get DockerChallenge info if this is a docker challenge
+            docker_challenge_obj = None
+            if challenge_obj.type == 'docker':
+                docker_challenge_obj = DockerChallenge.query.filter_by(id=challenge_id).first()
+            
             # Find the best server for this container image/group
             if is_multi_image:
                 # For multi-image, we need to find a server and get the actual images
@@ -2198,7 +2295,10 @@ class ContainerAPI(Resource):
             # If container exists and is not expired, and no stop/revert was requested, return existing container info
             elif check != None and not (unix_time(datetime.utcnow()) - int(check.timestamp)) >= instance_duration:
                 # Container exists and is not expired - return existing container info
+                # Use custom subdomain if set in challenge, otherwise use docker server domain
                 display_host = check.docker_config.domain if check.docker_config and check.docker_config.domain else str(check.host)
+                if docker_challenge_obj and docker_challenge_obj.custom_subdomain:
+                    display_host = docker_challenge_obj.custom_subdomain
                 port_list = check.ports.split(',') if check.ports else []
                 return {
                     "success": True,
@@ -2251,13 +2351,13 @@ class ContainerAPI(Resource):
                     current_app.logger.error(f"Error removing expired container from DB: {str(e)}")
 
             # Check if this is a multi-image selection or challenge
-            if is_multi_image or (challenge_obj and challenge_obj.challenge_type == 'multi' and challenge_obj.docker_images):
+            if is_multi_image or (docker_challenge_obj and docker_challenge_obj.challenge_type == 'multi' and docker_challenge_obj.docker_images):
                 # Multi-image challenge - use compose stack creation
                 try:
                     # Use actual images from server if we detected multi-image selection
                     # Otherwise use challenge configuration
-                    images_to_use = actual_images if is_multi_image else challenge_obj.docker_images
-                    primary_service = challenge_obj.primary_service if challenge_obj else None
+                    images_to_use = actual_images if is_multi_image else docker_challenge_obj.docker_images
+                    primary_service = docker_challenge_obj.primary_service if docker_challenge_obj else None
                     
                     current_app.logger.info(f"Creating multi-image stack with images: {images_to_use}")
                     current_app.logger.info(f"Primary service: {primary_service}")
@@ -2273,7 +2373,10 @@ class ContainerAPI(Resource):
                     current_app.logger.info(f"Multi-image stack created successfully: stack_id={stack_id}, containers={len(containers)}")
                     
                     # Create tracker entries for all containers in the stack
+                    # Use custom subdomain if set in challenge, otherwise use docker server domain
                     display_host = docker.domain if docker.domain else str(docker.hostname).split(':')[0]
+                    if docker_challenge_obj and docker_challenge_obj.custom_subdomain:
+                        display_host = docker_challenge_obj.custom_subdomain
                     
                     for container_info in containers:
                         entry = DockerChallengeTracker(
@@ -2324,7 +2427,10 @@ class ContainerAPI(Resource):
                     ports = json.loads(create[1])['HostConfig']['PortBindings'].values()
                     
                     # Determine what host/domain to show to user
+                    # Use custom subdomain if set in challenge, otherwise use docker server domain
                     display_host = docker.domain if docker.domain else str(docker.hostname).split(':')[0]
+                    if docker_challenge_obj and docker_challenge_obj.custom_subdomain:
+                        display_host = docker_challenge_obj.custom_subdomain
                     
                     port_list = [p[0]['HostPort'] for p in ports]
                     entry = DockerChallengeTracker(

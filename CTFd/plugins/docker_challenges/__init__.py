@@ -2140,30 +2140,36 @@ class ContainerAPI(Resource):
                 project_name = project_name.strip()
                 current_app.logger.info(f"✓ Extracted project name: '{project_name}'")
             else:
-                current_app.logger.info(f"✗ No multi-image pattern found, treating as single image")
+                current_app.logger.error(f"[PATH] Single image mode")
                 # Parse the actual image name from the display format
                 container = parse_image_name_from_display(container_display)
+                current_app.logger.error(f"[PATH] Parsed container name: '{container}'")
                 
                 # Basic input validation
                 if not isinstance(container, str) or len(container) > 256:
+                    current_app.logger.error(f"[EARLY RETURN] Invalid container name")
                     return {"success": False, "message": "Invalid container name"}, 400
                 
 
                 
             challenge = request.args.get('challenge')
             if not challenge:
+                current_app.logger.error(f"[EARLY RETURN] No challenge name specified")
                 return {"success": False, "message": "No challenge name specified"}, 403
                 
             # Basic input validation
             if not isinstance(challenge, str) or len(challenge) > 256:
+                current_app.logger.error(f"[EARLY RETURN] Invalid challenge name")
                 return {"success": False, "message": "Invalid challenge name"}, 400
             
             # Get challenge ID from challenge name - use Challenges table, not DockerChallenge
             from CTFd.models import Challenges
             challenge_obj = Challenges.query.filter_by(name=challenge).first()
             if not challenge_obj:
+                current_app.logger.error(f"[EARLY RETURN] Challenge '{challenge}' not found")
                 return {"success": False, "message": f"Challenge '{challenge}' not found"}, 404
             challenge_id = challenge_obj.id
+            current_app.logger.error(f"[PATH] Found challenge ID: {challenge_id}, type: {challenge_obj.type}")
             
             # Get DockerChallenge info if this is a docker challenge
             docker_challenge_obj = None
@@ -2204,9 +2210,13 @@ class ContainerAPI(Resource):
                     return {"success": False, "message": f"No server found with multi-image group '{project_name}' or no images found"}, 500
             else:
                 # Single image - use original logic
+                current_app.logger.error(f"[PATH] Getting best server for image: {container}")
                 docker = get_best_server_for_image(container)
                 if not docker:
+                    current_app.logger.error(f"[EARLY RETURN] No available Docker server found")
                     return {"success": False, "message": f"No available Docker server found for image: {container}"}, 500
+                
+                current_app.logger.error(f"[PATH] Found server: {docker.name}")
                 
                 # Check if container exists in repository (skip if we can't get repo list)
                 try:

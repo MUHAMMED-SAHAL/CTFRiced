@@ -2110,6 +2110,14 @@ class ContainerAPI(Resource):
     def get(self):
         try:
             container_display = request.args.get('name')
+            challenge = request.args.get('challenge')
+            
+            # Log every container request at the start
+            current_app.logger.error(f"========== CONTAINER REQUEST START ==========")
+            current_app.logger.error(f"Container: {container_display}")
+            current_app.logger.error(f"Challenge: {challenge}")
+            current_app.logger.error(f"Stop requested: {request.args.get('stopcontainer')}")
+            current_app.logger.error(f"============================================")
             
             if not container_display:
                 return {"success": False, "message": "No container specified"}, 403
@@ -2366,12 +2374,16 @@ class ContainerAPI(Resource):
             # If container exists and is not expired, and no stop/revert was requested, return existing container info
             elif check != None and not (unix_time(datetime.utcnow()) - int(check.timestamp)) >= instance_duration:
                 # Container exists and is not expired - return existing container info
+                current_app.logger.error(f"[RETURN PATH] Returning existing container info")
+                current_app.logger.error(f"[RETURN PATH] Instance ID: {check.instance_id}, Age: {unix_time(datetime.utcnow()) - int(check.timestamp)}s, Duration limit: {instance_duration}s")
+                
                 # Use custom subdomain if set in challenge, otherwise use docker server domain
                 display_host = check.docker_config.domain if check.docker_config and check.docker_config.domain else str(check.host)
                 if docker_challenge_obj and docker_challenge_obj.custom_subdomain:
                     display_host = docker_challenge_obj.custom_subdomain
                 port_list = check.ports.split(',') if check.ports else []
-                return {
+                
+                response = {
                     "success": True,
                     "result": "Container already running",
                     "hostname": display_host,
@@ -2379,6 +2391,8 @@ class ContainerAPI(Resource):
                     "revert_time": check.revert_time,
                     "existing": True
                 }
+                current_app.logger.error(f"[RETURN PATH] Response: {response}")
+                return response
             
             # Check if a container is already running for this user. We need to recheck the DB first
             # Also clean up any expired containers (older than configured duration)

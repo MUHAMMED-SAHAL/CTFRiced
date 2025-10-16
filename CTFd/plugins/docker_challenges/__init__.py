@@ -2455,7 +2455,14 @@ class ContainerAPI(Resource):
                     current_app.logger.error(f"Error removing expired container from DB: {str(e)}")
 
             # Check if this is a multi-image selection or challenge
+            current_app.logger.error(f"[PATH] Checking if multi-image: is_multi_image={is_multi_image}")
+            if docker_challenge_obj:
+                current_app.logger.error(f"[PATH] Docker challenge config: type={docker_challenge_obj.challenge_type}, images={docker_challenge_obj.docker_images}")
+            else:
+                current_app.logger.error(f"[PATH] No docker_challenge_obj found")
+            
             if is_multi_image or (docker_challenge_obj and docker_challenge_obj.challenge_type == 'multi' and docker_challenge_obj.docker_images):
+                current_app.logger.error(f"[PATH] TAKING MULTI-IMAGE PATH")
                 # Multi-image challenge - use compose stack creation
                 try:
                     # Use actual images from server if we detected multi-image selection
@@ -2522,11 +2529,16 @@ class ContainerAPI(Resource):
 
             # Single image challenge - use original logic
             if not is_multi_image:
+                current_app.logger.error(f"[PATH] Starting single image container creation")
                 # Get ports and create container
                 try:
+                    current_app.logger.error(f"[PATH] Getting unavailable ports")
                     portsbl = get_unavailable_ports(docker)
+                    current_app.logger.error(f"[PATH] Unavailable ports: {portsbl}")
                     
+                    current_app.logger.error(f"[PATH] Calling create_container with image={container}, team={session.name}")
                     create = create_container(docker, container, session.name, portsbl, challenge_id=challenge_id)
+                    current_app.logger.error(f"[PATH] Container created successfully: {create[0]['Id']}")
                     
                     ports = json.loads(create[1])['HostConfig']['PortBindings'].values()
                     

@@ -2203,9 +2203,16 @@ class ContainerAPI(Resource):
                 # Check if container exists in repository (skip if we can't get repo list)
                 try:
                     repositories = get_repositories(docker, tags=True)
+                    current_app.logger.info(f"Checking if '{container}' exists in repositories")
+                    current_app.logger.info(f"Available repositories ({len(repositories)}): {repositories[:10] if len(repositories) > 10 else repositories}")
+                    current_app.logger.info(f"Server '{docker.name}' repository filter: {docker.repositories if docker.repositories else 'None (all allowed)'}")
+                    
                     if container not in repositories:
-                        current_app.logger.info(f"Container {container} not found in repository list, will attempt to pull")
+                        current_app.logger.warning(f"Container '{container}' not found in repository list")
+                        current_app.logger.info(f"Will attempt to pull or use anyway")
                         # Don't abort here - let Docker try to pull the image
+                    else:
+                        current_app.logger.info(f"Container '{container}' found in repositories")
                 except Exception as e:
                     current_app.logger.warning(f"Could not get repository list from server {docker.name}: {str(e)}")
                     current_app.logger.info("Continuing anyway - Docker will attempt to pull image if needed")

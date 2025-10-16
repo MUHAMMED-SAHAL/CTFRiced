@@ -3,6 +3,7 @@ import logging
 import threading
 import time
 import os
+import re
 from datetime import datetime
 import socket
 import tempfile
@@ -882,33 +883,44 @@ def get_repositories(docker, tags=False, repos=False, group_compose=False, chall
                         separator = ''
                     
                     if len(parts) >= 2:
-                        project_name = separator.join(parts[:-1])  # e.g., "h7tex" from "h7tex-backend"
-                        service_name = parts[-1]                   # e.g., "backend" from "h7tex-backend"
+                        last_part = parts[-1]
                         
-                        # Create challenge-aware group key to prevent collisions
-                        if image_challenge_id:
-                            # Use challenge ID in group key for labeled images
-                            group_key = f"{project_name}_chal_{image_challenge_id}"
-                            display_name = project_name
+                        # Check if the last part is a version number (e.g., "1.0", "2.0", "v1", "v2")
+                        # If so, don't treat this as a compose stack
+                        is_version = bool(re.match(r'^(v?\d+(\.\d+)*|latest|stable|dev)$', last_part, re.IGNORECASE))
+                        
+                        if is_version:
+                            # This is a versioned image, not a compose stack
+                            result.append(image_name)  # Treat as single image
                         else:
-                            # For unlabeled images, use project name but mark as unlabeled
-                            group_key = f"{project_name}_unlabeled"
-                            display_name = f"{project_name} (unlabeled)"
-                        
+                            # This looks like a compose stack (e.g., "project-frontend", "project-backend")
+                            project_name = separator.join(parts[:-1])  # e.g., "h7tex" from "h7tex-backend"
+                            service_name = last_part                   # e.g., "backend" from "h7tex-backend"
+                            
+                            # Create challenge-aware group key to prevent collisions
+                            if image_challenge_id:
+                                # Use challenge ID in group key for labeled images
+                                group_key = f"{project_name}_chal_{image_challenge_id}"
+                                display_name = project_name
+                            else:
+                                # For unlabeled images, use project name but mark as unlabeled
+                                group_key = f"{project_name}_unlabeled"
+                                display_name = f"{project_name} (unlabeled)"
+                            
 
-                        
-                        if group_key not in compose_groups:
-                            compose_groups[group_key] = {
-                                'images': [],
-                                'services': [],
-                                'project_name': project_name,
-                                'display_name': display_name,
-                                'challenge_id': image_challenge_id,
-                                'is_labeled': bool(image_challenge_id)
-                            }
-                        
-                        compose_groups[group_key]['images'].append(image_name)
-                        compose_groups[group_key]['services'].append(service_name)
+                            
+                            if group_key not in compose_groups:
+                                compose_groups[group_key] = {
+                                    'images': [],
+                                    'services': [],
+                                    'project_name': project_name,
+                                    'display_name': display_name,
+                                    'challenge_id': image_challenge_id,
+                                    'is_labeled': bool(image_challenge_id)
+                                }
+                            
+                            compose_groups[group_key]['images'].append(image_name)
+                            compose_groups[group_key]['services'].append(service_name)
                     else:
                         result.append(image_name)  # Single image
                 else:

@@ -2220,7 +2220,9 @@ class ContainerAPI(Resource):
                 
                 # Check if container exists in repository (skip if we can't get repo list)
                 try:
+                    current_app.logger.error(f"[PATH] Checking repository list")
                     repositories = get_repositories(docker, tags=True)
+                    current_app.logger.error(f"[PATH] Got {len(repositories)} repositories")
                     current_app.logger.info(f"Checking if '{container}' exists in repositories")
                     current_app.logger.info(f"Available repositories ({len(repositories)}): {repositories[:10] if len(repositories) > 10 else repositories}")
                     current_app.logger.info(f"Server '{docker.name}' repository filter: {docker.repositories if docker.repositories else 'None (all allowed)'}")
@@ -2232,11 +2234,13 @@ class ContainerAPI(Resource):
                     else:
                         current_app.logger.info(f"Container '{container}' found in repositories")
                 except Exception as e:
+                    current_app.logger.error(f"[PATH] Exception in repository check: {str(e)}")
                     current_app.logger.warning(f"Could not get repository list from server {docker.name}: {str(e)}")
                     current_app.logger.info("Continuing anyway - Docker will attempt to pull image if needed")
                     # Don't abort here - continue with the container operation
             
             # Get current session
+            current_app.logger.error(f"[PATH] Getting current session")
             try:
                 if is_teams_mode():
                     session = get_current_team()
@@ -2244,14 +2248,19 @@ class ContainerAPI(Resource):
                     session = get_current_user()
                     
                 if not session:
+                    current_app.logger.error(f"[EARLY RETURN] No valid session")
                     return {"success": False, "message": "No valid session"}, 403
+                
+                current_app.logger.error(f"[PATH] Got session: ID={session.id}, Name={session.name}")
             except Exception as e:
                 current_app.logger.error(f"Error getting session: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 return {"success": False, "message": "Failed to get user session"}, 500
             
+            current_app.logger.error(f"[PATH] About to query DockerChallengeTracker")
             containers = DockerChallengeTracker.query.all()
+            current_app.logger.error(f"[PATH] Found {len(containers)} total containers in DB")
             
             # Clean up expired containers first (older than 2 hours)
             try:

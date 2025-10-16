@@ -2286,6 +2286,13 @@ class ContainerAPI(Resource):
                     else:
                         check = DockerChallengeTracker.query.filter_by(user_id=session.id).filter_by(docker_image=container).first()
                 
+                if check:
+                    current_app.logger.info(f"[KAKASHI DEBUG] Found existing DB entry for challenge '{challenge}', image '{container}'")
+                    current_app.logger.info(f"[KAKASHI DEBUG] DB Entry: instance_id={check.instance_id}, timestamp={check.timestamp}, docker_image={check.docker_image}")
+                    current_app.logger.info(f"[KAKASHI DEBUG] Current time: {unix_time(datetime.utcnow())}, Entry age: {unix_time(datetime.utcnow()) - int(check.timestamp)} seconds")
+                else:
+                    current_app.logger.info(f"[KAKASHI DEBUG] No existing DB entry found for challenge '{challenge}', image '{container}'")
+                
                 # Check if user is making requests too frequently
                 if check and (unix_time(datetime.utcnow()) - int(check.timestamp)) < 30:
                     return {"success": False, "message": "Rate limit exceeded. Please wait at least 30 seconds between requests."}, 429

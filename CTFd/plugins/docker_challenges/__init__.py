@@ -2540,7 +2540,9 @@ class ContainerAPI(Resource):
                     create = create_container(docker, container, session.name, portsbl, challenge_id=challenge_id)
                     current_app.logger.error(f"[PATH] Container created successfully: {create[0]['Id']}")
                     
+                    current_app.logger.error(f"[PATH] Parsing port bindings from create response")
                     ports = json.loads(create[1])['HostConfig']['PortBindings'].values()
+                    current_app.logger.error(f"[PATH] Port bindings: {list(ports)}")
                     
                     # Determine what host/domain to show to user
                     # Use custom subdomain if set in challenge, otherwise use docker server domain
@@ -2549,6 +2551,9 @@ class ContainerAPI(Resource):
                         display_host = docker_challenge_obj.custom_subdomain
                     
                     port_list = [p[0]['HostPort'] for p in ports]
+                    current_app.logger.error(f"[PATH] Extracted port list: {port_list}")
+                    
+                    current_app.logger.error(f"[PATH] Creating DB entry")
                     entry = DockerChallengeTracker(
                         team_id=session.id if is_teams_mode() else None,
                         user_id=session.id if not is_teams_mode() else None,
@@ -2561,19 +2566,25 @@ class ContainerAPI(Resource):
                         challenge=challenge,
                         docker_config_id=docker.id
                     )
+                    current_app.logger.error(f"[PATH] Adding entry to DB session")
                     db.session.add(entry)
+                    current_app.logger.error(f"[PATH] Committing to DB")
                     db.session.commit()
-                    return {
+                    current_app.logger.error(f"[PATH] DB commit successful, preparing response")
+                    
+                    response = {
                         "success": True,
                         "result": "Container created successfully",
                         "hostname": display_host,
                         "port": port_list[0] if port_list else None,
                         "revert_time": unix_time(datetime.utcnow()) + instance_duration
                     }
+                    current_app.logger.error(f"[PATH] RETURNING SUCCESS: {response}")
+                    return response
                 except Exception as e:
-                    current_app.logger.error(f"Error creating container: {str(e)}")
+                    current_app.logger.error(f"[EXCEPTION] Error creating container: {str(e)}")
                     import traceback
-                    traceback.print_exc()
+                    current_app.logger.error(f"[EXCEPTION] Traceback: {traceback.format_exc()}")
                     return {"success": False, "message": f"Failed to create container: {str(e)}"}, 500
         
         except Exception as e:

@@ -2110,14 +2110,6 @@ class ContainerAPI(Resource):
     def get(self):
         try:
             container_display = request.args.get('name')
-            challenge = request.args.get('challenge')
-            
-            # Log every container request at the start
-            current_app.logger.error(f"========== CONTAINER REQUEST START ==========")
-            current_app.logger.error(f"Container: {container_display}")
-            current_app.logger.error(f"Challenge: {challenge}")
-            current_app.logger.error(f"Stop requested: {request.args.get('stopcontainer')}")
-            current_app.logger.error(f"============================================")
             
             if not container_display:
                 return {"success": False, "message": "No container specified"}, 403
@@ -2140,36 +2132,29 @@ class ContainerAPI(Resource):
                 project_name = project_name.strip()
                 current_app.logger.info(f"✓ Extracted project name: '{project_name}'")
             else:
-                current_app.logger.error(f"[PATH] Single image mode")
                 # Parse the actual image name from the display format
                 container = parse_image_name_from_display(container_display)
-                current_app.logger.error(f"[PATH] Parsed container name: '{container}'")
                 
                 # Basic input validation
                 if not isinstance(container, str) or len(container) > 256:
-                    current_app.logger.error(f"[EARLY RETURN] Invalid container name")
                     return {"success": False, "message": "Invalid container name"}, 400
                 
 
                 
             challenge = request.args.get('challenge')
             if not challenge:
-                current_app.logger.error(f"[EARLY RETURN] No challenge name specified")
                 return {"success": False, "message": "No challenge name specified"}, 403
                 
             # Basic input validation
             if not isinstance(challenge, str) or len(challenge) > 256:
-                current_app.logger.error(f"[EARLY RETURN] Invalid challenge name")
                 return {"success": False, "message": "Invalid challenge name"}, 400
             
             # Get challenge ID from challenge name - use Challenges table, not DockerChallenge
             from CTFd.models import Challenges
             challenge_obj = Challenges.query.filter_by(name=challenge).first()
             if not challenge_obj:
-                current_app.logger.error(f"[EARLY RETURN] Challenge '{challenge}' not found")
                 return {"success": False, "message": f"Challenge '{challenge}' not found"}, 404
             challenge_id = challenge_obj.id
-            current_app.logger.error(f"[PATH] Found challenge ID: {challenge_id}, type: {challenge_obj.type}")
             
             # Get DockerChallenge info if this is a docker challenge
             docker_challenge_obj = None
@@ -2210,37 +2195,22 @@ class ContainerAPI(Resource):
                     return {"success": False, "message": f"No server found with multi-image group '{project_name}' or no images found"}, 500
             else:
                 # Single image - use original logic
-                current_app.logger.error(f"[PATH] Getting best server for image: {container}")
                 docker = get_best_server_for_image(container)
                 if not docker:
-                    current_app.logger.error(f"[EARLY RETURN] No available Docker server found")
                     return {"success": False, "message": f"No available Docker server found for image: {container}"}, 500
-                
-                current_app.logger.error(f"[PATH] Found server: {docker.name}")
                 
                 # Check if container exists in repository (skip if we can't get repo list)
                 try:
-                    current_app.logger.error(f"[PATH] Checking repository list")
                     repositories = get_repositories(docker, tags=True)
-                    current_app.logger.error(f"[PATH] Got {len(repositories)} repositories")
-                    current_app.logger.info(f"Checking if '{container}' exists in repositories")
-                    current_app.logger.info(f"Available repositories ({len(repositories)}): {repositories[:10] if len(repositories) > 10 else repositories}")
-                    current_app.logger.info(f"Server '{docker.name}' repository filter: {docker.repositories if docker.repositories else 'None (all allowed)'}")
-                    
                     if container not in repositories:
-                        current_app.logger.warning(f"Container '{container}' not found in repository list")
-                        current_app.logger.info(f"Will attempt to pull or use anyway")
+                        current_app.logger.info(f"Container {container} not found in repository list, will attempt to pull")
                         # Don't abort here - let Docker try to pull the image
-                    else:
-                        current_app.logger.info(f"Container '{container}' found in repositories")
                 except Exception as e:
-                    current_app.logger.error(f"[PATH] Exception in repository check: {str(e)}")
                     current_app.logger.warning(f"Could not get repository list from server {docker.name}: {str(e)}")
                     current_app.logger.info("Continuing anyway - Docker will attempt to pull image if needed")
                     # Don't abort here - continue with the container operation
             
             # Get current session
-            current_app.logger.error(f"[PATH] Getting current session")
             try:
                 if is_teams_mode():
                     session = get_current_team()
@@ -2248,19 +2218,14 @@ class ContainerAPI(Resource):
                     session = get_current_user()
                     
                 if not session:
-                    current_app.logger.error(f"[EARLY RETURN] No valid session")
                     return {"success": False, "message": "No valid session"}, 403
-                
-                current_app.logger.error(f"[PATH] Got session: ID={session.id}, Name={session.name}")
             except Exception as e:
                 current_app.logger.error(f"Error getting session: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 return {"success": False, "message": "Failed to get user session"}, 500
             
-            current_app.logger.error(f"[PATH] About to query DockerChallengeTracker")
             containers = DockerChallengeTracker.query.all()
-            current_app.logger.error(f"[PATH] Found {len(containers)} total containers in DB")
             
             # Clean up expired containers first (older than 2 hours)
             try:
@@ -2312,13 +2277,6 @@ class ContainerAPI(Resource):
                         check = DockerChallengeTracker.query.filter_by(team_id=session.id).filter_by(docker_image=container).first()
                     else:
                         check = DockerChallengeTracker.query.filter_by(user_id=session.id).filter_by(docker_image=container).first()
-                
-                if check:
-                    current_app.logger.info(f"[KAKASHI DEBUG] Found existing DB entry for challenge '{challenge}', image '{container}'")
-                    current_app.logger.info(f"[KAKASHI DEBUG] DB Entry: instance_id={check.instance_id}, timestamp={check.timestamp}, docker_image={check.docker_image}")
-                    current_app.logger.info(f"[KAKASHI DEBUG] Current time: {unix_time(datetime.utcnow())}, Entry age: {unix_time(datetime.utcnow()) - int(check.timestamp)} seconds")
-                else:
-                    current_app.logger.info(f"[KAKASHI DEBUG] No existing DB entry found for challenge '{challenge}', image '{container}'")
                 
                 # Check if user is making requests too frequently
                 if check and (unix_time(datetime.utcnow()) - int(check.timestamp)) < 30:
@@ -2393,16 +2351,12 @@ class ContainerAPI(Resource):
             # If container exists and is not expired, and no stop/revert was requested, return existing container info
             elif check != None and not (unix_time(datetime.utcnow()) - int(check.timestamp)) >= instance_duration:
                 # Container exists and is not expired - return existing container info
-                current_app.logger.error(f"[RETURN PATH] Returning existing container info")
-                current_app.logger.error(f"[RETURN PATH] Instance ID: {check.instance_id}, Age: {unix_time(datetime.utcnow()) - int(check.timestamp)}s, Duration limit: {instance_duration}s")
-                
                 # Use custom subdomain if set in challenge, otherwise use docker server domain
                 display_host = check.docker_config.domain if check.docker_config and check.docker_config.domain else str(check.host)
                 if docker_challenge_obj and docker_challenge_obj.custom_subdomain:
                     display_host = docker_challenge_obj.custom_subdomain
                 port_list = check.ports.split(',') if check.ports else []
-                
-                response = {
+                return {
                     "success": True,
                     "result": "Container already running",
                     "hostname": display_host,
@@ -2410,8 +2364,6 @@ class ContainerAPI(Resource):
                     "revert_time": check.revert_time,
                     "existing": True
                 }
-                current_app.logger.error(f"[RETURN PATH] Response: {response}")
-                return response
             
             # Check if a container is already running for this user. We need to recheck the DB first
             # Also clean up any expired containers (older than configured duration)
@@ -2455,14 +2407,7 @@ class ContainerAPI(Resource):
                     current_app.logger.error(f"Error removing expired container from DB: {str(e)}")
 
             # Check if this is a multi-image selection or challenge
-            current_app.logger.error(f"[PATH] Checking if multi-image: is_multi_image={is_multi_image}")
-            if docker_challenge_obj:
-                current_app.logger.error(f"[PATH] Docker challenge config: type={docker_challenge_obj.challenge_type}, images={docker_challenge_obj.docker_images}")
-            else:
-                current_app.logger.error(f"[PATH] No docker_challenge_obj found")
-            
             if is_multi_image or (docker_challenge_obj and docker_challenge_obj.challenge_type == 'multi' and docker_challenge_obj.docker_images):
-                current_app.logger.error(f"[PATH] TAKING MULTI-IMAGE PATH")
                 # Multi-image challenge - use compose stack creation
                 try:
                     # Use actual images from server if we detected multi-image selection
@@ -2529,20 +2474,13 @@ class ContainerAPI(Resource):
 
             # Single image challenge - use original logic
             if not is_multi_image:
-                current_app.logger.error(f"[PATH] Starting single image container creation")
                 # Get ports and create container
                 try:
-                    current_app.logger.error(f"[PATH] Getting unavailable ports")
                     portsbl = get_unavailable_ports(docker)
-                    current_app.logger.error(f"[PATH] Unavailable ports: {portsbl}")
                     
-                    current_app.logger.error(f"[PATH] Calling create_container with image={container}, team={session.name}")
                     create = create_container(docker, container, session.name, portsbl, challenge_id=challenge_id)
-                    current_app.logger.error(f"[PATH] Container created successfully: {create[0]['Id']}")
                     
-                    current_app.logger.error(f"[PATH] Parsing port bindings from create response")
                     ports = json.loads(create[1])['HostConfig']['PortBindings'].values()
-                    current_app.logger.error(f"[PATH] Port bindings: {list(ports)}")
                     
                     # Determine what host/domain to show to user
                     # Use custom subdomain if set in challenge, otherwise use docker server domain
@@ -2551,9 +2489,6 @@ class ContainerAPI(Resource):
                         display_host = docker_challenge_obj.custom_subdomain
                     
                     port_list = [p[0]['HostPort'] for p in ports]
-                    current_app.logger.error(f"[PATH] Extracted port list: {port_list}")
-                    
-                    current_app.logger.error(f"[PATH] Creating DB entry")
                     entry = DockerChallengeTracker(
                         team_id=session.id if is_teams_mode() else None,
                         user_id=session.id if not is_teams_mode() else None,
@@ -2566,25 +2501,19 @@ class ContainerAPI(Resource):
                         challenge=challenge,
                         docker_config_id=docker.id
                     )
-                    current_app.logger.error(f"[PATH] Adding entry to DB session")
                     db.session.add(entry)
-                    current_app.logger.error(f"[PATH] Committing to DB")
                     db.session.commit()
-                    current_app.logger.error(f"[PATH] DB commit successful, preparing response")
-                    
-                    response = {
+                    return {
                         "success": True,
                         "result": "Container created successfully",
                         "hostname": display_host,
                         "port": port_list[0] if port_list else None,
                         "revert_time": unix_time(datetime.utcnow()) + instance_duration
                     }
-                    current_app.logger.error(f"[PATH] RETURNING SUCCESS: {response}")
-                    return response
                 except Exception as e:
-                    current_app.logger.error(f"[EXCEPTION] Error creating container: {str(e)}")
+                    current_app.logger.error(f"Error creating container: {str(e)}")
                     import traceback
-                    current_app.logger.error(f"[EXCEPTION] Traceback: {traceback.format_exc()}")
+                    traceback.print_exc()
                     return {"success": False, "message": f"Failed to create container: {str(e)}"}, 500
         
         except Exception as e:

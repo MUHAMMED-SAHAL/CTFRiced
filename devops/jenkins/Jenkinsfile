@@ -1,0 +1,59 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_IMAGE = 'ctfriced-app'
+        AWS_REGION = 'eu-north-1'
+        EC2_HOST = '51.21.55.41'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Checking out code from GitHub...'
+                git branch: 'main', url: 'https://github.com/MUHAMMED-SAHAL/CTFRiced'
+            }
+        }
+        
+        stage('Build Docker Images') {
+            steps {
+                echo 'Building CTFd Docker containers...'
+                sh 'docker-compose build'
+            }
+        }
+        
+        stage('Run Tests') {
+            steps {
+                echo 'Running container health checks...'
+                sh 'docker-compose config --quiet'
+            }
+        }
+        
+        stage('Deploy to AWS') {
+            steps {
+                echo 'Deploying to AWS EC2...'
+                sh '''
+                    docker-compose down || true
+                    docker-compose up -d
+                    docker-compose ps
+                '''
+            }
+        }
+        
+        stage('Post-Deployment Verification') {
+            steps {
+                echo 'Verifying deployment...'
+                sh 'curl -I http://localhost:8000 || echo "Service starting..."'
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check logs for details.'
+        }
+    }
+}

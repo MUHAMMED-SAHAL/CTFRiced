@@ -97,18 +97,20 @@ pipeline {
                     echo "Waiting for CTFd to be ready..."
                     for i in {1..30}; do
                         if curl -f http://localhost:8000 > /dev/null 2>&1; then
-                            echo "✓ CTFd is running!"
+                            echo "✓ CTFd is running on port 8000!"
+                            curl -I http://localhost:8000
                             exit 0
                         fi
                         echo "Attempt $i/30: Waiting..."
                         sleep 2
                     done
                     echo "✗ CTFd failed to start"
-                    docker-compose logs
+                    docker-compose logs ctfd || true
                     exit 1
                 '''
             }
-        }
+}
+
     }
     
     post {

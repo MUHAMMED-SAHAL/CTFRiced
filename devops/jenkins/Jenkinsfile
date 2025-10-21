@@ -31,6 +31,17 @@ pipeline {
                 checkout scm
             }
         }
+
+        stage('Fix Permissions') {
+            steps {
+                echo '=== Fixing file permissions ==='
+                sh '''
+                    cd $WORKSPACE
+                    chmod +x docker-entrypoint.sh
+                    sed -i 's/\r$//' docker-entrypoint.sh
+                '''
+            }
+        }
         
         stage('Environment Check') {
             steps {

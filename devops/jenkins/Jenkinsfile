@@ -1,59 +1,147 @@
 pipeline {
     agent any
     
+    options {
+        // Limit build history to save memory
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+        
+        // Timeout to prevent hanging builds
+        timeout(time: 30, unit: 'MINUTES')
+        
+        // Disable concurrent builds
+        disableConcurrentBuilds()
+    }
+    
     environment {
-        DOCKER_IMAGE = 'ctfriced-app'
-        AWS_REGION = 'eu-north-1'
-        EC2_HOST = '51.21.55.41'
+        DOCKER_BUILDKIT = '1'
+        COMPOSE_DOCKER_CLI_BUILD = '1'
     }
     
     stages {
+        stage('Cleanup Workspace') {
+            steps {
+                echo '=== Cleaning workspace ==='
+                cleanWs()
+            }
+        }
+        
         stage('Checkout') {
             steps {
-                echo 'Checking out code from GitHub...'
-                git branch: 'main', url: 'https://github.com/MUHAMMED-SAHAL/CTFRiced'
+                echo '=== Checking out code from GitHub ==='
+                checkout scm
             }
         }
-        
-        stage('Build Docker Images') {
+
+        stage('Fix Permissions') {
             steps {
-                echo 'Building CTFd Docker containers...'
-                sh 'docker-compose build'
-            }
-        }
-        
-        stage('Run Tests') {
-            steps {
-                echo 'Running container health checks...'
-                sh 'docker-compose config --quiet'
-            }
-        }
-        
-        stage('Deploy to AWS') {
-            steps {
-                echo 'Deploying to AWS EC2...'
+                echo '=== Fixing file permissions ==='
                 sh '''
+                    cd $WORKSPACE
+                    chmod +x docker-entrypoint.sh
+                    sed -i 's/\r$//' docker-entrypoint.sh
+                '''
+            }
+        }
+        
+        stage('Environment Check') {
+            steps {
+                echo '=== Checking environment ==='
+                sh '''
+                    echo "Memory status:"
+                    free -h
+                    echo "Docker status:"
+                    docker --version
+                    docker-compose --version
+                '''
+            }
+        }
+        
+        stage('Stop Existing Containers') {
+            steps {
+                echo '=== Stopping existing CTFd containers ==='
+                sh '''
+                    cd $WORKSPACE
                     docker-compose down || true
+                    docker system prune -f || true
+                '''
+            }
+        }
+        
+        stage('Build Images') {
+            steps {
+                echo '=== Building Docker images (this may take time) ==='
+                sh '''
+                    cd $WORKSPACE
+                    # Build without cache to save memory
+                    docker-compose build --no-cache
+                '''
+            }
+        }
+        
+        stage('Deploy Application') {
+            steps {
+                echo '=== Deploying CTFd application ==='
+                sh '''
+                    cd $WORKSPACE
                     docker-compose up -d
+                    sleep 10
                     docker-compose ps
                 '''
             }
         }
         
-        stage('Post-Deployment Verification') {
+        stage('Health Check') {
             steps {
-                echo 'Verifying deployment...'
-                sh 'curl -I http://localhost:8000 || echo "Service starting..."'
+                echo '=== Verifying deployment ==='
+                sh '''
+                    echo "Containers started. Waiting for database migrations to complete..."
+                    sleep 25  # Database migrations take ~20 seconds
+                    
+                    echo "Checking container status..."
+                    docker-compose ps
+                    
+                    echo "Testing CTFd endpoint..."
+                    MAX_ATTEMPTS=20
+                    for i in $(seq 1 $MAX_ATTEMPTS); do
+                        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000 || echo "000")
+                        
+                        if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
+                            echo "✓ CTFd is running! (HTTP $HTTP_CODE)"
+                            echo "Final container status:"
+                            docker-compose ps
+                            echo "CTFd is accessible at:"
+                            curl -I http://localhost:8000
+                            exit 0
+                        fi
+                        
+                        echo "Attempt $i/$MAX_ATTEMPTS: HTTP $HTTP_CODE - Waiting..."
+                        sleep 2
+                    done
+                    
+                    echo "✗ Health check timeout"
+                    echo "Container status:"
+                    docker-compose ps
+                    echo "CTFd logs:"
+                    docker-compose logs --tail=30 ctfd
+                    exit 1
+                '''
             }
         }
+
     }
     
     post {
         success {
-            echo 'Pipeline completed successfully!'
+            echo '=== Pipeline completed successfully! ==='
+            sh 'docker-compose ps'
         }
         failure {
-            echo 'Pipeline failed. Check logs for details.'
+            echo '=== Pipeline failed ==='
+            sh 'docker-compose logs || true'
+        }
+        always {
+            echo '=== Cleaning up ==='
+            sh 'docker system prune -f || true'
         }
     }
 }

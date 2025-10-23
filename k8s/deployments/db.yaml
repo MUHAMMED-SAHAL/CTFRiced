@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ctfd-db
+  namespace: ctfd
+  labels:
+    app: ctfd-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ctfd-db
+  template:
+    metadata:
+      labels:
+        app: ctfd-db
+    spec:
+      containers:
+      - name: mariadb
+        image: mariadb:10.11
+        ports:
+        - containerPort: 3306
+          name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ctfd-secret
+              key: db-root-password
+        - name: MYSQL_DATABASE
+          value: "ctfd"
+        - name: MYSQL_USER
+          value: "ctfd"
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ctfd-secret
+              key: db-password
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "400m"
+        volumeMounts:
+        - name: db-data
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: db-data
+        emptyDir: {}

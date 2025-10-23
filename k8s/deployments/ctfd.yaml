@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ctfd
+  namespace: ctfd
+  labels:
+    app: ctfd
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ctfd
+      component: web
+  template:
+    metadata:
+      labels:
+        app: ctfd
+        component: web
+    spec:
+      containers:
+      - name: ctfd
+        image: shlmn/ctfd:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        envFrom:
+        - configMapRef:
+            name: ctfd-config
+        - secretRef:
+            name: ctfd-secret
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3

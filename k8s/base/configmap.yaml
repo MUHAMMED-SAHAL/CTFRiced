@@ -1,0 +1,16 @@
+# Trust the domain
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ctfd-config
+  namespace: ctfd
+data:
+  DATABASE_URL: "mysql+pymysql://ctfd:ctfd@ctfd-db:3306/ctfd"
+  REDIS_URL: "redis://ctfd-redis:6379"
+  UPLOAD_FOLDER: "/var/uploads"
+  LOG_LEVEL: "INFO"
+  # Reverse proxy configuration
+  REVERSE_PROXY: "true"
+  SERVER_SENT_EVENTS: "false"
+  # Trust the domain
+  TRUSTED_HOSTS: "ctf.mshlmn.xyz,localhost,172.31.20.119"

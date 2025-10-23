@@ -1,4 +1,4 @@
-Ricing CTFd to the best of my abilities! Piepline check 7!!!!!!!!!!
+Ricing CTFd to the best of my abilities! Piepline check 8!!!!!!!!!!
 
 CTFd [Latest](https://github.com/CTFd/CTFd/releases/latest)
 
